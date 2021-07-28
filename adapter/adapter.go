@@ -145,6 +145,63 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	return
 }
 
+func (p *Proxy) URLDownload(ctx context.Context, url string) (t int64, err error) {
+	defer func() {
+		p.alive.Store(err == nil)
+		record := C.DelayHistory{Time: time.Now()}
+		if err == nil {
+			record.Speed = t
+		}
+		p.history.Put(record)
+		if p.history.Len() > 10 {
+			p.history.Pop()
+		}
+	}()
+
+	addr, err := urlToMetadata(url)
+	if err != nil {
+		return
+	}
+
+	start := time.Now()
+	instance, err := p.DialContext(ctx, &addr)
+	if err != nil {
+		return
+	}
+	defer instance.Close()
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+	req = req.WithContext(ctx)
+
+	transport := &http.Transport{
+		Dial: func(string, string) (net.Conn, error) {
+			return instance, nil
+		},
+		// from http.DefaultTransport
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	client := http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+	t = resp.ContentLength / int64(time.Since(start)/time.Millisecond)
+	return
+}
+
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
 	return &Proxy{adapter, queue.New(10), atomic.NewBool(true)}
 }
