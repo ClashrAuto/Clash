@@ -152,7 +152,7 @@ func getProxySpeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err != nil || speed == 0 {
+	if err != nil {
 		render.Status(r, http.StatusServiceUnavailable)
 		render.JSON(w, r, newError("An error occurred in the delay test"))
 		return

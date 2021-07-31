@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -197,8 +198,13 @@ func (p *Proxy) URLDownload(ctx context.Context, url string) (t int64, err error
 	if err != nil {
 		return
 	}
-	resp.Body.Close()
-	t = resp.ContentLength / int64(time.Since(start)/time.Millisecond)
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+	t = int64(len(body)) / int64(time.Since(start)/time.Second)
 	return
 }
 
