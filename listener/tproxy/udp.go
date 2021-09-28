@@ -11,8 +11,24 @@ import (
 
 type UDPListener struct {
 	packetConn net.PacketConn
-	address    string
+	addr       string
 	closed     bool
+}
+
+// RawAddress implements C.Listener
+func (l *UDPListener) RawAddress() string {
+	return l.addr
+}
+
+// Address implements C.Listener
+func (l *UDPListener) Address() string {
+	return l.packetConn.LocalAddr().String()
+}
+
+// Close implements C.Listener
+func (l *UDPListener) Close() error {
+	l.closed = true
+	return l.packetConn.Close()
 }
 
 func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
@@ -21,7 +37,10 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 		return nil, err
 	}
 
-	rl := &UDPListener{l, addr, false}
+	rl := &UDPListener{
+		packetConn: l,
+		addr:       addr,
+	}
 
 	c := l.(*net.UDPConn)
 
@@ -57,15 +76,6 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 	}()
 
 	return rl, nil
-}
-
-func (l *UDPListener) Close() error {
-	l.closed = true
-	return l.packetConn.Close()
-}
-
-func (l *UDPListener) Address() string {
-	return l.address
 }
 
 func handlePacketConn(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, lAddr *net.UDPAddr, rAddr *net.UDPAddr) {

@@ -9,14 +9,31 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
 	"github.com/Dreamacro/clash/listener/socks"
+	"github.com/Dreamacro/clash/transport/socks4"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 type Listener struct {
 	listener net.Listener
-	address  string
-	closed   bool
+	addr     string
 	cache    *cache.Cache
+	closed   bool
+}
+
+// RawAddress implements C.Listener
+func (l *Listener) RawAddress() string {
+	return l.addr
+}
+
+// Address implements C.Listener
+func (l *Listener) Address() string {
+	return l.listener.Addr().String()
+}
+
+// Close implements C.Listener
+func (l *Listener) Close() error {
+	l.closed = true
+	return l.listener.Close()
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
@@ -25,7 +42,11 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 		return nil, err
 	}
 
-	ml := &Listener{l, addr, false, cache.New(30 * time.Second)}
+	ml := &Listener{
+		listener: l,
+		addr:     addr,
+		cache:    cache.New(30 * time.Second),
+	}
 	go func() {
 		for {
 			c, err := ml.listener.Accept()
@@ -42,15 +63,6 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	return ml, nil
 }
 
-func (l *Listener) Close() {
-	l.closed = true
-	l.listener.Close()
-}
-
-func (l *Listener) Address() string {
-	return l.address
-}
-
 func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
@@ -58,10 +70,12 @@ func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 		return
 	}
 
-	if head[0] == socks5.Version {
-		socks.HandleSocks(bufConn, in)
-		return
+	switch head[0] {
+	case socks4.Version:
+		socks.HandleSocks4(bufConn, in)
+	case socks5.Version:
+		socks.HandleSocks5(bufConn, in)
+	default:
+		http.HandleConn(bufConn, in, cache)
 	}
-
-	http.HandleConn(bufConn, in, cache)
 }

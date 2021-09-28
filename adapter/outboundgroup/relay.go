@@ -3,14 +3,13 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 )
 
 type Relay struct {
@@ -21,10 +20,20 @@ type Relay struct {
 
 // DialContext implements C.ProxyAdapter
 func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	proxies := r.proxies(metadata, true)
-	if len(proxies) == 0 {
-		return nil, errors.New("proxy does not exist")
+	var proxies []C.Proxy
+	for _, proxy := range r.proxies(metadata, true) {
+		if proxy.Type() != C.Direct {
+			proxies = append(proxies, proxy)
+		}
 	}
+
+	switch len(proxies) {
+	case 0:
+		return outbound.NewDirect().DialContext(ctx, metadata)
+	case 1:
+		return proxies[0].DialContext(ctx, metadata)
+	}
+
 	first := proxies[0]
 	last := proxies[len(proxies)-1]
 

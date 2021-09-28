@@ -3,48 +3,21 @@ package provider
 import (
 	"context"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	types "github.com/Dreamacro/clash/constant/provider"
 )
-
-// Vehicle Type
-const (
-	File VehicleType = iota
-	HTTP
-	Compatible
-)
-
-// VehicleType defined
-type VehicleType int
-
-func (v VehicleType) String() string {
-	switch v {
-	case File:
-		return "File"
-	case HTTP:
-		return "HTTP"
-	case Compatible:
-		return "Compatible"
-	default:
-		return "Unknown"
-	}
-}
-
-type Vehicle interface {
-	Read() ([]byte, error)
-	Path() string
-	Type() VehicleType
-}
 
 type FileVehicle struct {
 	path string
 }
 
-func (f *FileVehicle) Type() VehicleType {
-	return File
+func (f *FileVehicle) Type() types.VehicleType {
+	return types.File
 }
 
 func (f *FileVehicle) Path() string {
@@ -64,8 +37,8 @@ type HTTPVehicle struct {
 	path string
 }
 
-func (h *HTTPVehicle) Type() VehicleType {
-	return HTTP
+func (h *HTTPVehicle) Type() types.VehicleType {
+	return types.HTTP
 }
 
 func (h *HTTPVehicle) Path() string {
@@ -99,7 +72,9 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		DialContext:           dialer.DialContext,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, address)
+		},
 	}
 
 	client := http.Client{Transport: transport}

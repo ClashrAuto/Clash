@@ -16,12 +16,13 @@ import (
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	providerTypes "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 	R "github.com/Dreamacro/clash/rule"
 	T "github.com/Dreamacro/clash/tunnel"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
 // General config
@@ -70,9 +71,10 @@ type DNS struct {
 
 // FallbackFilter config
 type FallbackFilter struct {
-	GeoIP  bool         `yaml:"geoip"`
-	IPCIDR []*net.IPNet `yaml:"ipcidr"`
-	Domain []string     `yaml:"domain"`
+	GeoIP     bool         `yaml:"geoip"`
+	GeoIPCode string       `yaml:"geoip-code"`
+	IPCIDR    []*net.IPNet `yaml:"ipcidr"`
+	Domain    []string     `yaml:"domain"`
 }
 
 // Profile config
@@ -93,7 +95,7 @@ type Config struct {
 	Rules        []C.Rule
 	Users        []auth.AuthUser
 	Proxies      map[string]C.Proxy
-	Providers    map[string]provider.ProxyProvider
+	Providers    map[string]providerTypes.ProxyProvider
 }
 
 type RawDNS struct {
@@ -112,9 +114,10 @@ type RawDNS struct {
 }
 
 type RawFallbackFilter struct {
-	GeoIP  bool     `yaml:"geoip"`
-	IPCIDR []string `yaml:"ipcidr"`
-	Domain []string `yaml:"domain"`
+	GeoIP     bool     `yaml:"geoip"`
+	GeoIPCode string   `yaml:"geoip-code"`
+	IPCIDR    []string `yaml:"ipcidr"`
+	Domain    []string `yaml:"domain"`
 }
 
 type RawConfig struct {
@@ -171,8 +174,9 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			UseHosts:    true,
 			FakeIPRange: "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
-				GeoIP:  true,
-				IPCIDR: []string{},
+				GeoIP:     true,
+				GeoIPCode: "CN",
+				IPCIDR:    []string{},
 			},
 			DefaultNameserver: []string{
 				"114.114.114.114",
@@ -184,7 +188,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 	}
 
-	if err := yaml.Unmarshal(buf, &rawCfg); err != nil {
+	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
 		return nil, err
 	}
 
@@ -267,9 +271,9 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	}, nil
 }
 
-func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]provider.ProxyProvider, err error) {
+func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]providerTypes.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
-	providersMap = make(map[string]provider.ProxyProvider)
+	providersMap = make(map[string]providerTypes.ProxyProvider)
 	proxyList := []string{}
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
@@ -345,7 +349,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	// initial compatible provider
 	for _, pd := range providersMap {
-		if pd.VehicleType() != provider.Compatible {
+		if pd.VehicleType() != providerTypes.Compatible {
 			continue
 		}
 
@@ -367,7 +371,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		&outboundgroup.GroupCommonOption{
 			Name: "GLOBAL",
 		},
-		[]provider.ProxyProvider{pd},
+		[]providerTypes.ProxyProvider{pd},
 	)
 	proxies["GLOBAL"] = adapter.NewProxy(global)
 	return proxies, providersMap, nil
@@ -484,6 +488,9 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
 			addr = clearURL.String()
 			dnsNetType = "https" // DNS over HTTPS
+		case "dhcp":
+			addr = u.Host
+			dnsNetType = "dhcp" // UDP from DHCP
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}
@@ -599,6 +606,7 @@ func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 	}
 
 	dnsCfg.FallbackFilter.GeoIP = cfg.FallbackFilter.GeoIP
+	dnsCfg.FallbackFilter.GeoIPCode = cfg.FallbackFilter.GeoIPCode
 	if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
 		dnsCfg.FallbackFilter.IPCIDR = fallbackip
 	}

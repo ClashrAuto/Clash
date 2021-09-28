@@ -8,15 +8,16 @@ import (
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
@@ -70,13 +71,13 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	defer mux.Unlock()
 
 	updateUsers(cfg.Users)
-	updateGeneral(cfg.General, force)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
-	updateDNS(cfg.DNS)
 	updateHosts(cfg.Hosts)
-	updateExperimental(cfg)
 	updateProfile(cfg)
+	updateGeneral(cfg.General, force)
+	updateDNS(cfg.DNS)
+	updateExperimental(cfg)
 }
 
 func GetGeneral() *config.General {
@@ -123,9 +124,10 @@ func updateDNS(c *config.DNS) {
 		Pool:         c.FakeIPRange,
 		Hosts:        c.Hosts,
 		FallbackFilter: dns.FallbackFilter{
-			GeoIP:  c.FallbackFilter.GeoIP,
-			IPCIDR: c.FallbackFilter.IPCIDR,
-			Domain: c.FallbackFilter.Domain,
+			GeoIP:     c.FallbackFilter.GeoIP,
+			GeoIPCode: c.FallbackFilter.GeoIPCode,
+			IPCIDR:    c.FallbackFilter.IPCIDR,
+			Domain:    c.FallbackFilter.Domain,
 		},
 		Default: c.DefaultNameserver,
 		Policy:  c.NameServerPolicy,
@@ -170,12 +172,12 @@ func updateGeneral(general *config.General, force bool) {
 	resolver.DisableIPv6 = !general.IPv6
 
 	if general.Interface != "" {
-		dialer.DialHook = dialer.DialerWithInterface(general.Interface)
-		dialer.ListenPacketHook = dialer.ListenPacketWithInterface(general.Interface)
+		dialer.DefaultOptions = []dialer.Option{dialer.WithInterface(general.Interface)}
 	} else {
-		dialer.DialHook = nil
-		dialer.ListenPacketHook = nil
+		dialer.DefaultOptions = nil
 	}
+
+	iface.FlushCache()
 
 	if !force {
 		return
@@ -195,7 +197,7 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	if err := P.ReCreateSocks(general.SocksPort, tcpIn, udpIn); err != nil {
-		log.Errorln("Start SOCKS5 server error: %s", err.Error())
+		log.Errorln("Start SOCKS server error: %s", err.Error())
 	}
 
 	if err := P.ReCreateRedir(general.RedirPort, tcpIn, udpIn); err != nil {
@@ -207,7 +209,7 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	if err := P.ReCreateMixed(general.MixedPort, tcpIn, udpIn); err != nil {
-		log.Errorln("Start Mixed(http and socks5) server error: %s", err.Error())
+		log.Errorln("Start Mixed(http and socks) server error: %s", err.Error())
 	}
 }
 
