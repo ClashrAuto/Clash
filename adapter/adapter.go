@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"net"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/queue"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/VividCortex/ewma"
 
 	"go.uber.org/atomic"
 )
@@ -148,7 +150,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	return
 }
 
-func (p *Proxy) URLDownload(ctx context.Context, url string) (t uint16, err error) {
+func (p *Proxy) URLDownload(timeout int, url string) (t float64, err error) {
 	defer func() {
 		p.alive.Store(err == nil)
 		record := C.DelayHistory{Time: time.Now()}
@@ -166,7 +168,9 @@ func (p *Proxy) URLDownload(ctx context.Context, url string) (t uint16, err erro
 		return
 	}
 
-	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
+	defer cancel()
+
 	instance, err := p.DialContext(ctx, &addr)
 	if err != nil {
 		return
@@ -196,17 +200,57 @@ func (p *Proxy) URLDownload(ctx context.Context, url string) (t uint16, err erro
 			return http.ErrUseLastResponse
 		},
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	resp, err := client.Do(req)
+
 	if err != nil {
-		return
+		t = 0
+	} else {
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode == 200 {
+
+			var downloadTestTime = time.Millisecond * time.Duration(timeout)
+
+			timeStart := time.Now()
+			timeEnd := timeStart.Add(downloadTestTime)
+
+			contentLength := resp.ContentLength
+			buffer := make([]byte, contentLength)
+
+			var contentRead int64 = 0
+			var timeSlice = downloadTestTime / 100
+			var timeCounter = 1
+			var lastContentRead int64 = 0
+
+			var nextTime = timeStart.Add(timeSlice * time.Duration(timeCounter))
+			e := ewma.NewMovingAverage()
+
+			for contentLength != contentRead {
+				var currentTime = time.Now()
+				if currentTime.After(nextTime) {
+					timeCounter += 1
+					nextTime = timeStart.Add(timeSlice * time.Duration(timeCounter))
+					e.Add(float64(contentRead - lastContentRead))
+					lastContentRead = contentRead
+				}
+				if currentTime.After(timeEnd) {
+					break
+				}
+				bufferRead, err := resp.Body.Read(buffer)
+				contentRead += int64(bufferRead)
+				if err != nil {
+					if err != io.EOF {
+						break
+					} else {
+						e.Add(float64(contentRead-lastContentRead) / (float64(nextTime.Sub(currentTime)) / float64(timeSlice)))
+					}
+				}
+			}
+			t = e.Value() / (downloadTestTime.Seconds() / 100)
+		} else {
+			t = 0
+		}
 	}
-	t = uint16(len(body)) / uint16(time.Since(start)/time.Second)
 	return
 }
 

@@ -100,7 +100,7 @@ type ProxyAdapter interface {
 type DelayHistory struct {
 	Time  time.Time `json:"time"`
 	Delay uint16    `json:"delay"`
-	Speed uint16    `json:"speed"`
+	Speed float64   `json:"speed"`
 }
 
 type Proxy interface {
@@ -110,7 +110,7 @@ type Proxy interface {
 	Dial(metadata *Metadata) (Conn, error)
 	LastDelay() uint16
 	URLTest(ctx context.Context, url string) (uint16, error)
-	URLDownload(ctx context.Context, url string) (uint16, error)
+	URLDownload(timeout int, url string) (float64, error)
 }
 
 // AdapterType is enum of adapter type
