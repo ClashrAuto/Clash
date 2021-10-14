@@ -148,7 +148,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	return
 }
 
-func (p *Proxy) URLDownload(ctx context.Context, url string) (t int64, err error) {
+func (p *Proxy) URLDownload(ctx context.Context, url string) (t uint16, err error) {
 	defer func() {
 		p.alive.Store(err == nil)
 		record := C.DelayHistory{Time: time.Now()}
@@ -206,7 +206,7 @@ func (p *Proxy) URLDownload(ctx context.Context, url string) (t int64, err error
 	if err != nil {
 		return
 	}
-	t = int64(len(body)) / int64(time.Since(start)/time.Second)
+	t = uint16(len(body)) / uint16(time.Since(start)/time.Second)
 	return
 }
 
