@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -101,18 +102,18 @@ func (lb *LoadBalance) SupportUDP() bool {
 }
 
 func strategyRoundRobin() strategyFn {
-	idx := 0
+	//idx := 0
 	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
 		length := len(proxies)
-		for i := 0; i < length; i++ {
-			idx = (idx + 1) % length
-			proxy := proxies[idx]
-			if proxy.Alive() {
-				return proxy
-			}
-		}
-
-		return proxies[0]
+		//for i := 0; i < length; i++ {
+		//	idx = (idx + 1) % length
+		//	proxy := proxies[idx]
+		//	if proxy.Alive() {
+		//		return proxy
+		//	}
+		//}
+		x := rand.Intn(length)
+		return proxies[x]
 	}
 }
 
