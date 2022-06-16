@@ -20,6 +20,7 @@ const (
 	Selector
 	Fallback
 	URLTest
+	URLDownload
 	LoadBalance
 
 	Shadowsocks
@@ -30,13 +31,6 @@ const (
 	Vmess
 	Vless
 	Trojan
-
-	Relay
-	Selector
-	Fallback
-	URLTest
-	URLDownload
-	LoadBalance
 )
 
 const (
