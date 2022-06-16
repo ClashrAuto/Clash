@@ -12,8 +12,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/trojan"
-
-	"golang.org/x/net/http2"
+	"github.com/Dreamacro/clash/transport/vless"
 )
 
 type Trojan struct {
@@ -24,7 +23,7 @@ type Trojan struct {
 	// for gun mux
 	gunTLSConfig *tls.Config
 	gunConfig    *gun.Config
-	transport    *http2.Transport
+	transport    *gun.TransportWrap
 }
 
 type TrojanOption struct {
@@ -40,6 +39,8 @@ type TrojanOption struct {
 	Network        string      `proxy:"network,omitempty"`
 	GrpcOpts       GrpcOptions `proxy:"grpc-opts,omitempty"`
 	WSOpts         WSOptions   `proxy:"ws-opts,omitempty"`
+	Flow           string      `proxy:"flow,omitempty"`
+	FlowShow       bool        `proxy:"flow-show,omitempty"`
 }
 
 func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
@@ -82,6 +83,15 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
 
+	c, err = t.instance.PresetXTLSConn(c)
+	if err != nil {
+		return nil, err
+	}
+
+	if metadata.NetWork == C.UDP {
+		err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
+		return c, err
+	}
 	err = t.instance.WriteHeader(c, trojan.CommandTCP, serializesSocksAddr(metadata))
 	return c, err
 }
@@ -92,6 +102,12 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 	if t.transport != nil && len(opts) == 0 {
 		c, err := gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
+			return nil, err
+		}
+
+		c, err = t.instance.PresetXTLSConn(c)
+		if err != nil {
+			c.Close()
 			return nil, err
 		}
 
@@ -152,6 +168,17 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 	return newPacketConn(pc, t), err
 }
 
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (t *Trojan) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	pc := t.instance.PacketConn(c)
+	return newPacketConn(pc, t), err
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (t *Trojan) SupportUOT() bool {
+	return true
+}
+
 func NewTrojan(option TrojanOption) (*Trojan, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 
@@ -160,6 +187,17 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		ALPN:           option.ALPN,
 		ServerName:     option.Server,
 		SkipCertVerify: option.SkipCertVerify,
+		FlowShow:       option.FlowShow,
+	}
+
+	if option.Network != "ws" && len(option.Flow) >= 16 {
+		option.Flow = option.Flow[:16]
+		switch option.Flow {
+		case vless.XRO, vless.XRD, vless.XRS:
+			tOption.Flow = option.Flow
+		default:
+			return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
+		}
 	}
 
 	if option.SNI != "" {
@@ -196,7 +234,12 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			ServerName:         tOption.ServerName,
 		}
 
-		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+		if t.option.Flow != "" {
+			t.transport = gun.NewHTTP2XTLSClient(dialFn, tlsConfig)
+		} else {
+			t.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+		}
+
 		t.gunTLSConfig = tlsConfig
 		t.gunConfig = &gun.Config{
 			ServiceName: option.GrpcOpts.GrpcServiceName,

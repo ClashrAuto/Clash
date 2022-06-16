@@ -3,19 +3,19 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
-
+	"errors"
 	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
+	"time"
 )
 
 type Fallback struct {
-	*outbound.Base
+	*GroupBase
 	disableUDP bool
-	single     *singledo.Single
-	providers  []provider.ProxyProvider
+	testUrl    string
+	selected   string
 }
 
 func (f *Fallback) Now() string {
@@ -29,7 +29,11 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	c, err := proxy.DialContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(f)
+		f.onDialSuccess()
+	} else {
+		f.onDialFailed()
 	}
+
 	return c, err
 }
 
@@ -40,6 +44,7 @@ func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	if err == nil {
 		pc.AppendToChains(f)
 	}
+
 	return pc, err
 }
 
@@ -55,8 +60,8 @@ func (f *Fallback) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (f *Fallback) MarshalJSON() ([]byte, error) {
-	var all []string
-	for _, proxy := range f.proxies(false) {
+	all := []string{}
+	for _, proxy := range f.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
@@ -72,35 +77,57 @@ func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
 	return proxy
 }
 
-func (f *Fallback) proxies(touch bool) []C.Proxy {
-	elm, _, _ := f.single.Do(func() (any, error) {
-		return getProvidersProxies(f.providers, touch), nil
-	})
-
-	return elm.([]C.Proxy)
+func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
+	proxies := f.GetProxies(touch)
+	al := proxies[0]
+	for i := len(proxies) - 1; i > -1; i-- {
+		proxy := proxies[i]
+		if proxy.Name() == f.selected && proxy.Alive() {
+			return proxy
+		}
+		if proxy.Alive() {
+			al = proxy
+		}
+	}
+	return al
 }
 
-func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
-	proxies := f.proxies(touch)
-	for _, proxy := range proxies {
-		if proxy.Alive() {
-			return proxy
+func (f *Fallback) Set(name string) error {
+	var p C.Proxy
+	for _, proxy := range f.GetProxies(false) {
+		if proxy.Name() == name {
+			p = proxy
+			break
 		}
 	}
 
-	return proxies[0]
+	if p == nil {
+		return errors.New("proxy not exist")
+	}
+
+	f.selected = name
+	if !p.Alive() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
+		defer cancel()
+		_, _ = p.URLTest(ctx, f.testUrl)
+	}
+
+	return nil
 }
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
 	return &Fallback{
-		Base: outbound.NewBase(outbound.BaseOption{
-			Name:        option.Name,
-			Type:        C.Fallback,
-			Interface:   option.Interface,
-			RoutingMark: option.RoutingMark,
+		GroupBase: NewGroupBase(GroupBaseOption{
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.Fallback,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+			option.Filter,
+			providers,
 		}),
-		single:     singledo.NewSingle(defaultGetProxiesDuration),
-		providers:  providers,
 		disableUDP: option.DisableUDP,
+		testUrl:    option.URL,
 	}
 }

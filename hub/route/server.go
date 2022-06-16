@@ -51,14 +51,14 @@ func Start(addr string, secret string) {
 
 	r := chi.NewRouter()
 
-	cors := cors.New(cors.Options{
+	corsM := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
 
-	r.Use(cors.Handler)
+	r.Use(corsM.Handler)
 	r.Group(func(r chi.Router) {
 		r.Use(authentication)
 
@@ -68,9 +68,12 @@ func Start(addr string, secret string) {
 		r.Get("/version", version)
 		r.Mount("/configs", configRouter())
 		r.Mount("/proxies", proxyRouter())
+		r.Mount("/group", GroupRouter())
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
+		r.Mount("/providers/rules", ruleProviderRouter())
+		r.Mount("/cache", cacheRouter())
 	})
 
 	if uiPath != "" {
@@ -130,7 +133,7 @@ func authentication(next http.Handler) http.Handler {
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, render.M{"hello": "clash"})
+	render.JSON(w, r, render.M{"hello": "clash.auto"})
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {
@@ -212,27 +215,18 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	sub := log.Subscribe()
 	defer log.UnSubscribe(sub)
 	buf := &bytes.Buffer{}
-
-	go func() {
-		for elm := range sub {
-			log := elm.(log.Event)
-			select {
-			case ch <- log:
-			default:
-			}
-		}
-		close(ch)
-	}()
-
-	for log := range ch {
-		if log.LogLevel < level {
+	var err error
+	for elm := range sub {
+		buf.Reset()
+		logM := elm
+		if logM.LogLevel < level {
 			continue
 		}
 		buf.Reset()
 
 		if err := json.NewEncoder(buf).Encode(Log{
-			Type:    log.Type(),
-			Payload: log.Payload,
+			Type:    logM.Type(),
+			Payload: logM.Payload,
 		}); err != nil {
 			break
 		}
@@ -252,5 +246,5 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func version(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, render.M{"version": C.Version})
+	render.JSON(w, r, render.M{"auto": C.Meta, "version": C.Version})
 }

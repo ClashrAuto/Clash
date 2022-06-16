@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.uber.org/atomic"
 	"net"
+	"net/netip"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -15,10 +17,11 @@ import (
 
 type client struct {
 	*D.Client
-	r     *Resolver
-	port  string
-	host  string
-	iface string
+	r            *Resolver
+	port         string
+	host         string
+	iface        *atomic.String
+	proxyAdapter string
 }
 
 func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
@@ -27,17 +30,17 @@ func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
 
 func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) {
 	var (
-		ip  net.IP
+		ip  netip.Addr
 		err error
 	)
-	if c.r == nil {
-		// a default ip dns
-		if ip = net.ParseIP(c.host); ip == nil {
+	if ip, err = netip.ParseAddr(c.host); err != nil {
+		if c.r == nil {
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
-		}
-	} else {
-		if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
-			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+		} else {
+			if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
+				return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+			}
+			c.host = ip.String()
 		}
 	}
 
@@ -47,14 +50,23 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	}
 
 	options := []dialer.Option{}
-	if c.iface != "" {
-		options = append(options, dialer.WithInterface(c.iface))
+	if c.iface != nil && c.iface.Load() != "" {
+		options = append(options, dialer.WithInterface(c.iface.Load()))
 	}
-	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
+
+	var conn net.Conn
+	if c.proxyAdapter != "" {
+		conn, err = dialContextExtra(ctx, c.proxyAdapter, network, ip, c.port, options...)
+	} else {
+		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
+	}
+
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	// miekg/dns ExchangeContext doesn't respond to context cancel.
 	// this is a workaround

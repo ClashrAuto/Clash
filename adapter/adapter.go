@@ -8,7 +8,9 @@ import (
 
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/queue"
@@ -19,9 +21,11 @@ import (
 	"go.uber.org/atomic"
 )
 
+var UnifiedDelay = atomic.NewBool(false)
+
 type Proxy struct {
 	C.ProxyAdapter
-	history *queue.Queue
+	history *queue.Queue[C.DelayHistory]
 	alive   *atomic.Bool
 }
 
@@ -40,7 +44,11 @@ func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 // DialContext implements C.ProxyAdapter
 func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	conn, err := p.ProxyAdapter.DialContext(ctx, metadata, opts...)
-	p.alive.Store(err == nil)
+	wasCancel := false
+	if err != nil {
+		wasCancel = strings.Contains(err.Error(), "operation was canceled")
+	}
+	p.alive.Store(err == nil || wasCancel)
 	return conn, err
 }
 
@@ -60,10 +68,10 @@ func (p *Proxy) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 // DelayHistory implements C.Proxy
 func (p *Proxy) DelayHistory() []C.DelayHistory {
-	queue := p.history.Copy()
+	queueM := p.history.Copy()
 	histories := []C.DelayHistory{}
-	for _, item := range queue {
-		histories = append(histories, item.(C.DelayHistory))
+	for _, item := range queueM {
+		histories = append(histories, item)
 	}
 	return histories
 }
@@ -76,11 +84,7 @@ func (p *Proxy) LastDelay() (delay uint16) {
 		return max
 	}
 
-	last := p.history.Last()
-	if last == nil {
-		return max
-	}
-	history := last.(C.DelayHistory)
+	history := p.history.Last()
 	if history.Delay == 0 {
 		return max
 	}
@@ -95,7 +99,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	}
 
 	mapping := map[string]any{}
-	json.Unmarshal(inner, &mapping)
+	_ = json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()
@@ -117,6 +121,8 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 		}
 	}()
 
+	unifiedDelay := UnifiedDelay.Load()
+
 	addr, err := urlToMetadata(url)
 	if err != nil {
 		return
@@ -127,7 +133,9 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	if err != nil {
 		return
 	}
-	defer instance.Close()
+	defer func() {
+		_ = instance.Close()
+	}()
 
 	req, err := http.NewRequest(http.MethodHead, url, nil)
 	if err != nil {
@@ -136,7 +144,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	req = req.WithContext(ctx)
 
 	transport := &http.Transport{
-		Dial: func(string, string) (net.Conn, error) {
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
 			return instance, nil
 		},
 		// from http.DefaultTransport
@@ -153,12 +161,19 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 		},
 	}
 	defer client.CloseIdleConnections()
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}
-	resp.Body.Close()
+
+	if unifiedDelay {
+		start = time.Now()
+		resp, err = client.Do(req)
+		if err != nil {
+			return
+		}
+	}
+	_ = resp.Body.Close()
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }
@@ -268,7 +283,7 @@ func (p *Proxy) URLDownload(timeout int, url string) (t float64, err error) {
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
-	return &Proxy{adapter, queue.New(10), atomic.NewBool(true)}
+	return &Proxy{adapter, queue.New[C.DelayHistory](10), atomic.NewBool(true)}
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
@@ -293,7 +308,7 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 	addr = C.Metadata{
 		AddrType: C.AtypDomainName,
 		Host:     u.Hostname(),
-		DstIP:    nil,
+		DstIP:    netip.Addr{},
 		DstPort:  port,
 	}
 	return

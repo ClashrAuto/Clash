@@ -2,17 +2,23 @@ package executor
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/component/process"
+	"github.com/Dreamacro/clash/listener/inner"
+	"net/netip"
 	"os"
+	"runtime"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
+	G "github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
+	SNI "github.com/Dreamacro/clash/component/sniffer"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -20,6 +26,7 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
+	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -69,17 +76,29 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
-	updateRules(cfg.Rules)
+	updateRules(cfg.Rules, cfg.RuleProviders)
+	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
+	initInnerTcp()
+	updateDNS(cfg.DNS, cfg.General.IPv6)
+	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
+	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
-	updateDNS(cfg.DNS)
+	updateIPTables(cfg)
+	updateTun(cfg.Tun)
 	updateExperimental(cfg)
+
+	log.SetLevel(cfg.General.LogLevel)
+}
+
+func initInnerTcp() {
+	inner.New(tunnel.TCPIn())
 }
 
 func GetGeneral() *config.General {
 	ports := P.GetPorts()
-	authenticator := []string{}
+	var authenticator []string
 	if auth := authStore.Authenticator(); auth != nil {
 		authenticator = auth.Users()
 	}
@@ -95,9 +114,14 @@ func GetGeneral() *config.General {
 			AllowLan:       P.AllowLan(),
 			BindAddress:    P.BindAddress(),
 		},
-		Mode:     tunnel.Mode(),
-		LogLevel: log.Level(),
-		IPv6:     !resolver.DisableIPv6,
+		Mode:          tunnel.Mode(),
+		LogLevel:      log.Level(),
+		IPv6:          !resolver.DisableIPv6,
+		GeodataLoader: G.LoaderName(),
+		Tun:           P.GetTunConf(),
+		Interface:     dialer.DefaultInterface.Load(),
+		Sniffing:      tunnel.IsSniffing(),
+		TCPConcurrent: dialer.GetDial(),
 	}
 
 	return general
@@ -105,12 +129,16 @@ func GetGeneral() *config.General {
 
 func updateExperimental(c *config.Config) {}
 
-func updateDNS(c *config.DNS) {
+func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
+		resolver.DisableIPv6 = !generalIPv6
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
+		resolver.DefaultLocalServer = nil
 		dns.ReCreateServer("", nil, nil)
 		return
+	} else {
+		resolver.DisableIPv6 = !c.IPv6
 	}
 
 	cfg := dns.Config{
@@ -125,12 +153,15 @@ func updateDNS(c *config.DNS) {
 			GeoIPCode: c.FallbackFilter.GeoIPCode,
 			IPCIDR:    c.FallbackFilter.IPCIDR,
 			Domain:    c.FallbackFilter.Domain,
+			GeoSite:   c.FallbackFilter.GeoSite,
 		},
-		Default: c.DefaultNameserver,
-		Policy:  c.NameServerPolicy,
+		Default:     c.DefaultNameserver,
+		Policy:      c.NameServerPolicy,
+		ProxyServer: c.ProxyServerNameserver,
 	}
 
 	r := dns.NewResolver(cfg)
+	pr := dns.NewProxyServerHostResolver(r)
 	m := dns.NewEnhancer(cfg)
 
 	// reuse cache of old host mapper
@@ -140,11 +171,16 @@ func updateDNS(c *config.DNS) {
 
 	resolver.DefaultResolver = r
 	resolver.DefaultHostMapper = m
+	resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
+
+	if pr.HasProxyServer() {
+		resolver.ProxyServerHostResolver = pr
+	}
 
 	dns.ReCreateServer(c.Listen, r, m)
 }
 
-func updateHosts(tree *trie.DomainTrie) {
+func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
 	resolver.DefaultHosts = tree
 }
 
@@ -152,23 +188,126 @@ func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.Pro
 	tunnel.UpdateProxies(proxies, providers)
 }
 
-func updateRules(rules []C.Rule) {
-	tunnel.UpdateRules(rules)
+func updateRules(rules []C.Rule, ruleProviders map[string]provider.RuleProvider) {
+	tunnel.UpdateRules(rules, ruleProviders)
+}
+
+func loadProvider(pv provider.Provider) {
+	if pv.VehicleType() == provider.Compatible {
+		log.Infoln("Start initial compatible provider %s", pv.Name())
+	} else {
+		log.Infoln("Start initial provider %s", (pv).Name())
+	}
+
+	if err := pv.Initial(); err != nil {
+		switch pv.Type() {
+		case provider.Proxy:
+			{
+				log.Warnln("initial proxy provider %s error: %v", (pv).Name(), err)
+			}
+		case provider.Rule:
+			{
+				log.Warnln("initial rule provider %s error: %v", (pv).Name(), err)
+			}
+
+		}
+	}
+}
+
+func loadRuleProvider(ruleProviders map[string]provider.RuleProvider) {
+	wg := sync.WaitGroup{}
+	ch := make(chan struct{}, concurrentCount)
+	for _, ruleProvider := range ruleProviders {
+		ruleProvider := ruleProvider
+		wg.Add(1)
+		ch <- struct{}{}
+		go func() {
+			defer func() { <-ch; wg.Done() }()
+			loadProvider(ruleProvider)
+
+		}()
+	}
+
+	wg.Wait()
+}
+
+func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
+	// limit concurrent size
+	wg := sync.WaitGroup{}
+	ch := make(chan struct{}, concurrentCount)
+	for _, proxyProvider := range proxyProviders {
+		proxyProvider := proxyProvider
+		wg.Add(1)
+		ch <- struct{}{}
+		go func() {
+			defer func() { <-ch; wg.Done() }()
+			loadProvider(proxyProvider)
+		}()
+	}
+
+	wg.Wait()
+}
+
+func updateTun(tun *config.Tun) {
+	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
+}
+
+func updateSniffer(sniffer *config.Sniffer) {
+	if sniffer.Enable {
+		dispatcher, err := SNI.NewSnifferDispatcher(sniffer.Sniffers, sniffer.ForceDomain, sniffer.SkipDomain, sniffer.Ports)
+		if err != nil {
+			log.Warnln("initial sniffer failed, err:%v", err)
+		}
+
+		tunnel.UpdateSniffer(dispatcher)
+		log.Infoln("Sniffer is loaded and working")
+	} else {
+		dispatcher, err := SNI.NewCloseSnifferDispatcher()
+		if err != nil {
+			log.Warnln("initial sniffer failed, err:%v", err)
+		}
+
+		tunnel.UpdateSniffer(dispatcher)
+		log.Infoln("Sniffer is closed")
+	}
 }
 
 func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
+	process.EnableFindProcess(general.EnableProcess)
 	tunnel.SetMode(general.Mode)
-	resolver.DisableIPv6 = !general.IPv6
+	dialer.DisableIPv6 = !general.IPv6
+	if !dialer.DisableIPv6 {
+		log.Infoln("Use IPv6")
+	} else {
+		resolver.DisableIPv6 = true
+	}
 
+	if general.TCPConcurrent {
+		dialer.SetDial(general.TCPConcurrent)
+		log.Infoln("Use tcp concurrent")
+	}
+
+	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 	dialer.DefaultInterface.Store(general.Interface)
+
+	if dialer.DefaultInterface.Load() != "" {
+		log.Infoln("Use interface name: %s", general.Interface)
+	}
+
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
+	if general.RoutingMark > 0 {
+		log.Infoln("Use routing mark: %#x", general.RoutingMark)
+	}
 
 	iface.FlushCache()
 
 	if !force {
 		return
 	}
+
+	geodataLoader := general.GeodataLoader
+	G.SetLoader(geodataLoader)
 
 	allowLan := general.AllowLan
 	P.SetAllowLan(allowLan)
@@ -215,7 +354,7 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 			continue
 		}
 
-		selector, ok := outbound.ProxyAdapter.(*outboundgroup.Selector)
+		selector, ok := outbound.ProxyAdapter.(outboundgroup.SelectAble)
 		if !ok {
 			continue
 		}
@@ -227,4 +366,72 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 
 		selector.Set(selected)
 	}
+}
+
+func updateIPTables(cfg *config.Config) {
+	tproxy.CleanupTProxyIPTables()
+
+	iptables := cfg.IPTables
+	if runtime.GOOS != "linux" || !iptables.Enable {
+		return
+	}
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("[IPTABLES] setting iptables failed: %s", err.Error())
+			os.Exit(2)
+		}
+	}()
+
+	if cfg.Tun.Enable {
+		err = fmt.Errorf("when tun is enabled, iptables cannot be set automatically")
+		return
+	}
+
+	var (
+		inboundInterface = "lo"
+		bypass           = iptables.Bypass
+		tProxyPort       = cfg.General.TProxyPort
+		dnsCfg           = cfg.DNS
+	)
+
+	if tProxyPort == 0 {
+		err = fmt.Errorf("tproxy-port must be greater than zero")
+		return
+	}
+
+	if !dnsCfg.Enable {
+		err = fmt.Errorf("DNS server must be enable")
+		return
+	}
+
+	dnsPort, err := netip.ParseAddrPort(dnsCfg.Listen)
+	if err != nil {
+		err = fmt.Errorf("DNS server must be correct")
+		return
+	}
+
+	if iptables.InboundInterface != "" {
+		inboundInterface = iptables.InboundInterface
+	}
+
+	if dialer.DefaultRoutingMark.Load() == 0 {
+		dialer.DefaultRoutingMark.Store(2158)
+	}
+
+	err = tproxy.SetTProxyIPTables(inboundInterface, bypass, uint16(tProxyPort), dnsPort.Port())
+	if err != nil {
+		return
+	}
+
+	log.Infoln("[IPTABLES] Setting iptables completed")
+}
+
+func Shutdown() {
+	P.Cleanup(false)
+	tproxy.CleanupTProxyIPTables()
+	resolver.StoreFakePoolState()
+
+	log.Warnln("Clash shutting down")
 }

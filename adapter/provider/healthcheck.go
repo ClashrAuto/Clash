@@ -31,7 +31,11 @@ type HealthCheck struct {
 func (hc *HealthCheck) process() {
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
 
-	go hc.check()
+	go func() {
+		time.Sleep(30 * time.Second)
+		hc.check()
+	}()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -59,14 +63,14 @@ func (hc *HealthCheck) touch() {
 }
 
 func (hc *HealthCheck) check() {
-	b, _ := batch.New(context.Background(), batch.WithConcurrencyNum(10))
+	b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
 	for _, proxy := range hc.proxies {
 		p := proxy
-		b.Go(p.Name(), func() (any, error) {
+		b.Go(p.Name(), func() (bool, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
 			defer cancel()
-			p.URLTest(ctx, hc.url)
-			return nil, nil
+			_, _ = p.URLTest(ctx, hc.url)
+			return false, nil
 		})
 	}
 	b.Wait()

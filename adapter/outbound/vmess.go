@@ -15,8 +15,6 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/vmess"
-
-	"golang.org/x/net/http2"
 )
 
 type Vmess struct {
@@ -27,7 +25,7 @@ type Vmess struct {
 	// for gun mux
 	gunTLSConfig *tls.Config
 	gunConfig    *gun.Config
-	transport    *http2.Transport
+	transport    *gun.TransportWrap
 }
 
 type VmessOption struct {
@@ -47,6 +45,10 @@ type VmessOption struct {
 	HTTP2Opts      HTTP2Options `proxy:"h2-opts,omitempty"`
 	GrpcOpts       GrpcOptions  `proxy:"grpc-opts,omitempty"`
 	WSOpts         WSOptions    `proxy:"ws-opts,omitempty"`
+
+	// TODO: compatible with VMESS WS older version configurations
+	WSHeaders map[string]string `proxy:"ws-headers,omitempty"`
+	WSPath    string            `proxy:"ws-path,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -76,6 +78,13 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 	switch v.option.Network {
 	case "ws":
+		if v.option.WSOpts.Path == "" {
+			v.option.WSOpts.Path = v.option.WSPath
+		}
+		if len(v.option.WSOpts.Headers) == 0 {
+			v.option.WSOpts.Headers = v.option.WSHeaders
+		}
+
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
 			Host:                host,
@@ -249,7 +258,17 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
 
+	return v.ListenPacketOnStreamConn(c, metadata)
+}
+
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (v *Vmess) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	return newPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (v *Vmess) SupportUOT() bool {
+	return true
 }
 
 func NewVmess(option VmessOption) (*Vmess, error) {
@@ -331,11 +350,11 @@ func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 	case C.AtypIPv4:
 		addrType = byte(vmess.AtypIPv4)
 		addr = make([]byte, net.IPv4len)
-		copy(addr[:], metadata.DstIP.To4())
+		copy(addr[:], metadata.DstIP.AsSlice())
 	case C.AtypIPv6:
 		addrType = byte(vmess.AtypIPv6)
 		addr = make([]byte, net.IPv6len)
-		copy(addr[:], metadata.DstIP.To16())
+		copy(addr[:], metadata.DstIP.AsSlice())
 	case C.AtypDomainName:
 		addrType = byte(vmess.AtypDomainName)
 		addr = make([]byte, len(metadata.Host)+1)

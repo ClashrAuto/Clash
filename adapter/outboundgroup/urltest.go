@@ -21,13 +21,11 @@ func urlTestWithTolerance(tolerance uint16) urlTestOption {
 }
 
 type URLTest struct {
-	*outbound.Base
+	*GroupBase
 	tolerance  uint16
 	disableUDP bool
 	fastNode   C.Proxy
-	single     *singledo.Single
-	fastSingle *singledo.Single
-	providers  []provider.ProxyProvider
+	fastSingle *singledo.Single[C.Proxy]
 }
 
 func (u *URLTest) Now() string {
@@ -39,6 +37,9 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	c, err = u.fast(true).DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
+		u.onDialSuccess()
+	} else {
+		u.onDialFailed()
 	}
 	return c, err
 }
@@ -49,25 +50,18 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	if err == nil {
 		pc.AppendToChains(u)
 	}
+
 	return pc, err
 }
 
 // Unwrap implements C.ProxyAdapter
-func (u *URLTest) Unwrap(metadata *C.Metadata) C.Proxy {
+func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
 	return u.fast(true)
 }
 
-func (u *URLTest) proxies(touch bool) []C.Proxy {
-	elm, _, _ := u.single.Do(func() (any, error) {
-		return getProvidersProxies(u.providers, touch), nil
-	})
-
-	return elm.([]C.Proxy)
-}
-
 func (u *URLTest) fast(touch bool) C.Proxy {
-	elm, _, _ := u.fastSingle.Do(func() (any, error) {
-		proxies := u.proxies(touch)
+	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
+		proxies := u.GetProxies(touch)
 		fast := proxies[0]
 		min := fast.LastDelay()
 		fastNotExist := true
@@ -96,7 +90,7 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 		return u.fastNode, nil
 	})
 
-	return elm.(C.Proxy)
+	return elm
 }
 
 // SupportUDP implements C.ProxyAdapter
@@ -110,8 +104,8 @@ func (u *URLTest) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (u *URLTest) MarshalJSON() ([]byte, error) {
-	var all []string
-	for _, proxy := range u.proxies(false) {
+	all := []string{}
+	for _, proxy := range u.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
@@ -136,15 +130,18 @@ func parseURLTestOption(config map[string]any) []urlTestOption {
 
 func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, options ...urlTestOption) *URLTest {
 	urlTest := &URLTest{
-		Base: outbound.NewBase(outbound.BaseOption{
-			Name:        option.Name,
-			Type:        C.URLTest,
-			Interface:   option.Interface,
-			RoutingMark: option.RoutingMark,
+		GroupBase: NewGroupBase(GroupBaseOption{
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.URLTest,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+
+			option.Filter,
+			providers,
 		}),
-		single:     singledo.NewSingle(defaultGetProxiesDuration),
-		fastSingle: singledo.NewSingle(time.Second * 10),
-		providers:  providers,
+		fastSingle: singledo.NewSingle[C.Proxy](time.Second * 10),
 		disableUDP: option.DisableUDP,
 	}
 

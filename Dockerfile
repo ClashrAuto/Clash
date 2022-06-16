@@ -1,18 +1,26 @@
 FROM golang:alpine as builder
 
 RUN apk add --no-cache make git && \
-    wget -O /Country.mmdb https://github.com/Dreamacro/maxmind-geoip/releases/latest/download/Country.mmdb
-WORKDIR /clash-src
-COPY --from=tonistiigi/xx:golang / /
+    mkdir /clash-config && \
+    wget -O /clash-config/Country.mmdb https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb && \
+    wget -O /clash-config/geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat && \
+    wget -O /clash-config/geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+
+
 COPY . /clash-src
-RUN go mod download && \
-    make docker && \
-    mv ./bin/clash-docker /clash
+WORKDIR /clash-src
+RUN go mod download &&\
+    make docker &&\
+    mv ./bin/Clash.Meta-docker /clash
 
 FROM alpine:latest
-LABEL org.opencontainers.image.source="https://github.com/Dreamacro/clash"
+LABEL org.opencontainers.image.source="https://github.com/MetaCubeX/Clash.Meta"
 
 RUN apk add --no-cache ca-certificates tzdata
-COPY --from=builder /Country.mmdb /root/.config/clash/
-COPY --from=builder /clash /
-ENTRYPOINT ["/clash"]
+
+VOLUME ["/root/.config/clash/"]
+
+COPY --from=builder /clash-config/ /root/.config/clash/
+COPY --from=builder /clash /clash
+RUN chmod +x /clash
+ENTRYPOINT [ "/clash" ]
