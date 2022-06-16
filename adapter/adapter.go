@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/queue"
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/VividCortex/ewma"
 
@@ -37,12 +38,24 @@ func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 }
 
 // DialContext implements C.ProxyAdapter
-func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	conn, err := p.ProxyAdapter.DialContext(ctx, metadata)
-	if err != nil {
-		p.alive.Store(false)
-	}
+func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
+	conn, err := p.ProxyAdapter.DialContext(ctx, metadata, opts...)
+	p.alive.Store(err == nil)
 	return conn, err
+}
+
+// DialUDP implements C.ProxyAdapter
+func (p *Proxy) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
+	defer cancel()
+	return p.ListenPacketContext(ctx, metadata)
+}
+
+// ListenPacketContext implements C.ProxyAdapter
+func (p *Proxy) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	pc, err := p.ProxyAdapter.ListenPacketContext(ctx, metadata, opts...)
+	p.alive.Store(err == nil)
+	return pc, err
 }
 
 // DelayHistory implements C.Proxy
@@ -81,7 +94,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 		return inner, err
 	}
 
-	mapping := map[string]interface{}{}
+	mapping := map[string]any{}
 	json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
 	mapping["name"] = p.Name()
