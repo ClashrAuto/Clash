@@ -214,7 +214,6 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	sub := log.Subscribe()
 	defer log.UnSubscribe(sub)
 	buf := &bytes.Buffer{}
-	var err error
 	for elm := range sub {
 		buf.Reset()
 		logM := elm
