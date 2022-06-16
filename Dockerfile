@@ -11,7 +11,7 @@ COPY . /clash-src
 WORKDIR /clash-src
 RUN go mod download &&\
     make docker &&\
-    mv ./bin/Clash.Meta-docker /clash
+    mv ./bin/Clash.Auto-docker /clash
 
 FROM alpine:latest
 LABEL org.opencontainers.image.source="https://github.com/MetaCubeX/Clash.Meta"
