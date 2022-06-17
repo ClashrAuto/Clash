@@ -3,21 +3,20 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/Dreamacro/clash/config"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/features"
+	"github.com/Dreamacro/clash/hub"
+	"github.com/Dreamacro/clash/hub/executor"
+	"github.com/Dreamacro/clash/log"
+	"go.uber.org/automaxprocs/maxprocs"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
-
-	"github.com/Dreamacro/clash/config"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/hub"
-	"github.com/Dreamacro/clash/hub/executor"
-	"github.com/Dreamacro/clash/log"
-
-	"go.uber.org/automaxprocs/maxprocs"
+	"time"
 )
 
 var (
@@ -30,7 +29,10 @@ var (
 	externalUI         string
 	externalController string
 	secret             string
+	token              int64
 )
+
+var now = time.Now().UnixNano() / 1e6
 
 func init() {
 	flag.StringVar(&homeDir, "d", "", "set configuration directory")
@@ -41,6 +43,7 @@ func init() {
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of clash")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
+	flag.Int64Var(&token, "token", 0, "test configuration and exit")
 	flag.Parse()
 
 	flagset = map[string]bool{}
@@ -50,14 +53,26 @@ func init() {
 }
 
 func main() {
+
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
+
+	//t, err := strconv.ParseInt(token, 10, 64)
+	//if err != nil {
+	//	return
+	//}
+
 	if version {
-		fmt.Printf("Clash Meta %s %s %s with %s %s\n",
-			C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
+		fmt.Printf("%s %s %s %s with %s %s\n",
+			C.ClashName, C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
 		if len(features.TAGS) != 0 {
 			fmt.Printf("Use tags: %s\n", strings.Join(features.TAGS, ", "))
 		}
 
+		return
+	}
+
+	if token+10000 < now || token > now {
+		fmt.Printf("%d, %d, %d", token, now, now-token)
 		return
 	}
 
