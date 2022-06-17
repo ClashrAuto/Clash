@@ -32,7 +32,7 @@ func (hc *HealthCheck) process() {
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
 
 	go func() {
-		time.Sleep(30 * time.Second)
+		// 		time.Sleep(30 * time.Second)
 		hc.check()
 	}()
 
