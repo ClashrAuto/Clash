@@ -132,7 +132,7 @@ type Proxy interface {
 
 	// Deprecated: use DialPacketConn instead.
 	DialUDP(metadata *Metadata) (PacketConn, error)
-	URLDownload(timeout int, url string) (float64, error)
+	URLDownload(timeout int, url string) (float64, uint16, error)
 }
 
 // AdapterType is enum of adapter type

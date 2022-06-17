@@ -153,7 +153,7 @@ func getProxySpeed(w http.ResponseWriter, r *http.Request) {
 
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
 
-	speed, err := proxy.URLDownload(timeout, url)
+	speed, delay, err := proxy.URLDownload(timeout, url)
 	// if ctx.Err() != nil {
 	// 	render.Status(r, http.StatusGatewayTimeout)
 	// 	render.JSON(w, r, err)
@@ -168,5 +168,6 @@ func getProxySpeed(w http.ResponseWriter, r *http.Request) {
 
 	render.JSON(w, r, render.M{
 		"speed": speed,
+		"delay": delay,
 	})
 }

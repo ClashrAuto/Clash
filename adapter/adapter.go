@@ -178,18 +178,21 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	return
 }
 
-func (p *Proxy) URLDownload(timeout int, url string) (t float64, err error) {
+func (p *Proxy) URLDownload(timeout int, url string) (t float64, d uint16, err error) {
 	defer func() {
 		p.alive.Store(err == nil)
 		record := C.DelayHistory{Time: time.Now()}
 		if err == nil {
 			record.Speed = t
+			record.Delay = d
 		}
 		p.history.Put(record)
 		if p.history.Len() > 10 {
 			p.history.Pop()
 		}
 	}()
+
+	unifiedDelay := UnifiedDelay.Load()
 
 	addr, err := urlToMetadata(url)
 	if err != nil {
@@ -199,20 +202,23 @@ func (p *Proxy) URLDownload(timeout int, url string) (t float64, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
+	start := time.Now()
 	instance, err := p.DialContext(ctx, &addr)
 	if err != nil {
 		return
 	}
-	defer instance.Close()
+	defer func() {
+		_ = instance.Close()
+	}()
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodHead, url, nil)
 	if err != nil {
 		return
 	}
 	req = req.WithContext(ctx)
 
 	transport := &http.Transport{
-		Dial: func(string, string) (net.Conn, error) {
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
 			return instance, nil
 		},
 		// from http.DefaultTransport
@@ -228,8 +234,47 @@ func (p *Proxy) URLDownload(timeout int, url string) (t float64, err error) {
 			return http.ErrUseLastResponse
 		},
 	}
-
+	defer client.CloseIdleConnections()
 	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+
+	if unifiedDelay {
+		start = time.Now()
+		resp, err = client.Do(req)
+		if err != nil {
+			return
+		}
+	}
+	_ = resp.Body.Close()
+	d = uint16(time.Since(start) / time.Millisecond)
+
+	req, err = http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+	req = req.WithContext(ctx)
+
+	transport = &http.Transport{
+		Dial: func(string, string) (net.Conn, error) {
+			return instance, nil
+		},
+		// from http.DefaultTransport
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	client = http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err = client.Do(req)
 
 	if err != nil {
 		t = 0
