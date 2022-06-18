@@ -3,9 +3,9 @@
 package commons
 
 import (
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/iface"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/iface"
+	"github.com/ClashrAuto/clash/log"
 	"go.uber.org/atomic"
 	"time"
 )

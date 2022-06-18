@@ -1,7 +1,7 @@
 package trie
 
 import (
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/log"
 	"net"
 )
 

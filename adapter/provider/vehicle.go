@@ -2,8 +2,8 @@ package provider
 
 import (
 	"context"
-	netHttp "github.com/Dreamacro/clash/component/http"
-	types "github.com/Dreamacro/clash/constant/provider"
+	netHttp "github.com/ClashrAuto/clash/component/http"
+	types "github.com/ClashrAuto/clash/constant/provider"
 	"io"
 	"net/http"
 	"os"

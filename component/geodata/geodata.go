@@ -3,11 +3,11 @@ package geodata
 import (
 	"errors"
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/ClashrAuto/clash/constant"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/component/geodata/router"
+	"github.com/ClashrAuto/clash/log"
 )
 
 type loader struct {

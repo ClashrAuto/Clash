@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"time"
 
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/ClashrAuto/clash/constant"
 )
 
 func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {

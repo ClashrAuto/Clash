@@ -5,14 +5,14 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/ClashrAuto/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/resolver"
 	"net"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/log"
 	"github.com/lucas-clemente/quic-go"
 	D "github.com/miekg/dns"
 )

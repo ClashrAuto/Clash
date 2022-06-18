@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/gun"
-	"github.com/Dreamacro/clash/transport/trojan"
-	"github.com/Dreamacro/clash/transport/vless"
+	"github.com/ClashrAuto/clash/component/dialer"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/transport/gun"
+	"github.com/ClashrAuto/clash/transport/trojan"
+	"github.com/ClashrAuto/clash/transport/vless"
 )
 
 type Trojan struct {

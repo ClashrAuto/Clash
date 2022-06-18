@@ -3,7 +3,7 @@ package fdbased
 import (
 	"fmt"
 
-	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/ClashrAuto/clash/listener/tun/device"
 
 	"gvisor.dev/gvisor/pkg/tcpip/link/fdbased"
 	"gvisor.dev/gvisor/pkg/tcpip/link/rawfile"

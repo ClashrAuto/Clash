@@ -4,8 +4,8 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/constant/sniffer"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"github.com/ClashrAuto/clash/constant/sniffer"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack/commons"
 	"net"
 	"net/netip"
 	"net/url"
@@ -15,26 +15,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/utils"
-	R "github.com/Dreamacro/clash/rules"
-	RP "github.com/Dreamacro/clash/rules/provider"
+	"github.com/ClashrAuto/clash/common/utils"
+	R "github.com/ClashrAuto/clash/rules"
+	RP "github.com/ClashrAuto/clash/rules/provider"
 
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/adapter/provider"
-	"github.com/Dreamacro/clash/component/auth"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/fakeip"
-	"github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	providerTypes "github.com/Dreamacro/clash/constant/provider"
-	snifferTypes "github.com/Dreamacro/clash/constant/sniffer"
-	"github.com/Dreamacro/clash/dns"
-	"github.com/Dreamacro/clash/log"
-	T "github.com/Dreamacro/clash/tunnel"
+	"github.com/ClashrAuto/clash/adapter"
+	"github.com/ClashrAuto/clash/adapter/outbound"
+	"github.com/ClashrAuto/clash/adapter/outboundgroup"
+	"github.com/ClashrAuto/clash/adapter/provider"
+	"github.com/ClashrAuto/clash/component/auth"
+	"github.com/ClashrAuto/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/fakeip"
+	"github.com/ClashrAuto/clash/component/geodata"
+	"github.com/ClashrAuto/clash/component/geodata/router"
+	"github.com/ClashrAuto/clash/component/trie"
+	C "github.com/ClashrAuto/clash/constant"
+	providerTypes "github.com/ClashrAuto/clash/constant/provider"
+	snifferTypes "github.com/ClashrAuto/clash/constant/sniffer"
+	"github.com/ClashrAuto/clash/dns"
+	"github.com/ClashrAuto/clash/log"
+	T "github.com/ClashrAuto/clash/tunnel"
 
 	"gopkg.in/yaml.v2"
 )
@@ -455,9 +455,11 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 
 		if _, exist := proxies[proxy.Name()]; exist {
-			return nil, nil, fmt.Errorf("proxy %s is the duplicate name", proxy.Name())
+			//return nil, nil, fmt.Errorf("proxy %s is the duplicate name", proxy.Name())
+		} else {
+			proxies[proxy.Name()] = proxy
 		}
-		proxies[proxy.Name()] = proxy
+		//proxies[proxy.Name()] = proxy
 		proxyList = append(proxyList, proxy.Name())
 		proxiesList.PushBack(mapping)
 	}

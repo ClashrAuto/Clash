@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/cache"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	authStore "github.com/Dreamacro/clash/listener/auth"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/adapter/inbound"
+	"github.com/ClashrAuto/clash/common/cache"
+	N "github.com/ClashrAuto/clash/common/net"
+	C "github.com/ClashrAuto/clash/constant"
+	authStore "github.com/ClashrAuto/clash/listener/auth"
+	"github.com/ClashrAuto/clash/log"
 )
 
 func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {

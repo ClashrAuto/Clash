@@ -12,12 +12,12 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/gun"
-	"github.com/Dreamacro/clash/transport/vless"
-	"github.com/Dreamacro/clash/transport/vmess"
+	"github.com/ClashrAuto/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/resolver"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/transport/gun"
+	"github.com/ClashrAuto/clash/transport/vless"
+	"github.com/ClashrAuto/clash/transport/vmess"
 )
 
 const (

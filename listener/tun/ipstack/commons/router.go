@@ -2,7 +2,7 @@ package commons
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/log"
 	"net"
 	"time"
 )

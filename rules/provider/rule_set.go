@@ -2,9 +2,9 @@ package provider
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
-	P "github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/rules/common"
+	C "github.com/ClashrAuto/clash/constant"
+	P "github.com/ClashrAuto/clash/constant/provider"
+	"github.com/ClashrAuto/clash/rules/common"
 )
 
 type RuleSet struct {

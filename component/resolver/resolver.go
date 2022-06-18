@@ -8,8 +8,8 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/Dreamacro/clash/common/nnip"
-	"github.com/Dreamacro/clash/component/trie"
+	"github.com/ClashrAuto/clash/common/nnip"
+	"github.com/ClashrAuto/clash/component/trie"
 )
 
 var (

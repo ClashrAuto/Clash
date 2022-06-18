@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/geodata/router"
+	"github.com/ClashrAuto/clash/component/geodata/router"
 )
 
 type RuleExtra struct {

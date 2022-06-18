@@ -2,8 +2,8 @@ package provider
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
 )
 
 type classicalStrategy struct {

@@ -3,7 +3,7 @@ package tunnel
 import (
 	"context"
 	"fmt"
-	P "github.com/Dreamacro/clash/component/process"
+	P "github.com/ClashrAuto/clash/component/process"
 	"net"
 	"net/netip"
 	"path/filepath"
@@ -12,15 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/component/nat"
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/component/sniffer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
-	icontext "github.com/Dreamacro/clash/context"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	"github.com/ClashrAuto/clash/adapter/inbound"
+	"github.com/ClashrAuto/clash/component/nat"
+	"github.com/ClashrAuto/clash/component/resolver"
+	"github.com/ClashrAuto/clash/component/sniffer"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/constant/provider"
+	icontext "github.com/ClashrAuto/clash/context"
+	"github.com/ClashrAuto/clash/log"
+	"github.com/ClashrAuto/clash/tunnel/statistic"
 )
 
 var (
@@ -100,6 +100,14 @@ func RuleProviders() map[string]provider.RuleProvider {
 // UpdateProxies handle update proxies
 func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provider.ProxyProvider) {
 	configMux.Lock()
+
+	// 将原来的delay的历史记录更新到同名新的节点上
+	for _, v := range newProxies {
+		if value, ok := proxies[v.Name()]; ok {
+			newProxies[v.Name()].PutHistory(value.DelayHistory())
+		}
+	}
+
 	proxies = newProxies
 	providers = newProviders
 	configMux.Unlock()

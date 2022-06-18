@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/cache"
-	"github.com/Dreamacro/clash/common/nnip"
-	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel"
+	"github.com/ClashrAuto/clash/common/cache"
+	"github.com/ClashrAuto/clash/common/nnip"
+	"github.com/ClashrAuto/clash/component/dialer"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
+	"github.com/ClashrAuto/clash/tunnel"
 
 	D "github.com/miekg/dns"
 )

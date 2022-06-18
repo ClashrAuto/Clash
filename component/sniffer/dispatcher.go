@@ -2,19 +2,19 @@ package sniffer
 
 import (
 	"errors"
-	"github.com/Dreamacro/clash/constant/sniffer"
+	"github.com/ClashrAuto/clash/constant/sniffer"
 	"net"
 	"net/netip"
 	"strconv"
 	"time"
 
-	"github.com/Dreamacro/clash/component/trie"
+	"github.com/ClashrAuto/clash/component/trie"
 
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	CN "github.com/ClashrAuto/clash/common/net"
+	"github.com/ClashrAuto/clash/common/utils"
+	"github.com/ClashrAuto/clash/component/resolver"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
 )
 
 var (

@@ -2,10 +2,10 @@ package rules
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
-	RC "github.com/Dreamacro/clash/rules/common"
-	"github.com/Dreamacro/clash/rules/logic"
-	RP "github.com/Dreamacro/clash/rules/provider"
+	C "github.com/ClashrAuto/clash/constant"
+	RC "github.com/ClashrAuto/clash/rules/common"
+	"github.com/ClashrAuto/clash/rules/logic"
+	RP "github.com/ClashrAuto/clash/rules/provider"
 )
 
 func ParseRule(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {

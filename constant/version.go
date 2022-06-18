@@ -2,7 +2,7 @@ package constant
 
 var (
 	Meta      = true
-	Version   = "1.10.0"
+	Version   = "2.0.0"
 	BuildTime = "unknown time"
 	ClashName = "Clash.Auto"
 )

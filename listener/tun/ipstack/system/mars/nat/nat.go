@@ -6,8 +6,8 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
+	"github.com/ClashrAuto/clash/common/pool"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack/system/mars/tcpip"
 )
 
 func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *UDP, error) {

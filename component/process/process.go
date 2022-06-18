@@ -2,8 +2,8 @@ package process
 
 import (
 	"errors"
-	"github.com/Dreamacro/clash/common/nnip"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/ClashrAuto/clash/common/nnip"
+	C "github.com/ClashrAuto/clash/constant"
 	"net"
 	"net/netip"
 )

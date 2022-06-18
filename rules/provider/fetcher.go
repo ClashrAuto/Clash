@@ -3,8 +3,8 @@ package provider
 import (
 	"bytes"
 	"crypto/md5"
-	P "github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/log"
+	P "github.com/ClashrAuto/clash/constant/provider"
+	"github.com/ClashrAuto/clash/log"
 	"io/ioutil"
 	"os"
 	"path/filepath"

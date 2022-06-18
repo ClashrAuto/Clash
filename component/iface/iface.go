@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/ClashrAuto/clash/common/singledo"
 )
 
 type Interface struct {

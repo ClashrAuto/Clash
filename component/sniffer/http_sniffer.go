@@ -3,7 +3,7 @@ package sniffer
 import (
 	"bytes"
 	"errors"
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/ClashrAuto/clash/constant"
 	"net"
 	"strings"
 )

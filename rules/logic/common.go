@@ -2,8 +2,8 @@ package logic
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/collections"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/ClashrAuto/clash/common/collections"
+	C "github.com/ClashrAuto/clash/constant"
 	"regexp"
 	"strings"
 	_ "unsafe"

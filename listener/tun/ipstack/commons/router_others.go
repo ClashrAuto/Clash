@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"runtime"
 
-	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/ClashrAuto/clash/listener/tun/device"
 )
 
 func GetAutoDetectInterface() (string, error) {

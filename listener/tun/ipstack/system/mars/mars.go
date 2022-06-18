@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/netip"
 
-	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/nat"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack/system/mars/nat"
 )
 
 type StackListener struct {

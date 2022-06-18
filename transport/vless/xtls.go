@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/ClashrAuto/clash/constant"
 	xtls "github.com/xtls/go"
 )
 

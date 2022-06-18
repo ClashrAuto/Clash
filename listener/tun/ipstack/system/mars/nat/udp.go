@@ -7,9 +7,9 @@ import (
 	"net/netip"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/nnip"
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
+	"github.com/ClashrAuto/clash/common/nnip"
+	"github.com/ClashrAuto/clash/common/pool"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack/system/mars/tcpip"
 )
 
 type call struct {

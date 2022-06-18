@@ -13,11 +13,11 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/pool"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/vless"
-	"github.com/Dreamacro/clash/transport/vmess"
+	"github.com/ClashrAuto/clash/common/pool"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/transport/socks5"
+	"github.com/ClashrAuto/clash/transport/vless"
+	"github.com/ClashrAuto/clash/transport/vmess"
 
 	xtls "github.com/xtls/go"
 )

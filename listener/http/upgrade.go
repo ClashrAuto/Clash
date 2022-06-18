@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/ClashrAuto/clash/adapter/inbound"
+	N "github.com/ClashrAuto/clash/common/net"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/transport/socks5"
 )
 
 func isUpgradeRequest(req *http.Request) bool {

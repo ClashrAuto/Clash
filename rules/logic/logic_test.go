@@ -2,9 +2,9 @@ package logic
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/constant"
-	RC "github.com/Dreamacro/clash/rules/common"
-	RP "github.com/Dreamacro/clash/rules/provider"
+	"github.com/ClashrAuto/clash/constant"
+	RC "github.com/ClashrAuto/clash/rules/common"
+	RP "github.com/ClashrAuto/clash/rules/provider"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

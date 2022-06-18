@@ -4,8 +4,8 @@ import (
 	"github.com/oschwald/geoip2-golang"
 	"sync"
 
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
 )
 
 var (

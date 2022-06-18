@@ -3,12 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/Dreamacro/clash/config"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/features"
-	"github.com/Dreamacro/clash/hub"
-	"github.com/Dreamacro/clash/hub/executor"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/config"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/constant/features"
+	"github.com/ClashrAuto/clash/hub"
+	"github.com/ClashrAuto/clash/hub/executor"
+	"github.com/ClashrAuto/clash/log"
 	"go.uber.org/automaxprocs/maxprocs"
 	"os"
 	"os/signal"
@@ -55,12 +55,6 @@ func init() {
 func main() {
 
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
-
-	//t, err := strconv.ParseInt(token, 10, 64)
-	//if err != nil {
-	//	return
-	//}
-
 	if version {
 		fmt.Printf("%s %s %s %s with %s %s\n",
 			C.ClashName, C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
@@ -72,7 +66,6 @@ func main() {
 	}
 
 	if token+10000 < now || token > now {
-		fmt.Printf("%d, %d, %d", token, now, now-token)
 		return
 	}
 

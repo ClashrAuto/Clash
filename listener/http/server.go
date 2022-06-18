@@ -4,8 +4,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/Dreamacro/clash/common/cache"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/ClashrAuto/clash/common/cache"
+	C "github.com/ClashrAuto/clash/constant"
 )
 
 type Listener struct {

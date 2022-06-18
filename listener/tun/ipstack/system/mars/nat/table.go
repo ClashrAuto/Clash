@@ -3,7 +3,7 @@ package nat
 import (
 	"net/netip"
 
-	"github.com/Dreamacro/clash/common/generics/list"
+	"github.com/ClashrAuto/clash/common/generics/list"
 )
 
 const (

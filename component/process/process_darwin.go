@@ -6,7 +6,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/Dreamacro/clash/common/nnip"
+	"github.com/ClashrAuto/clash/common/nnip"
 
 	"golang.org/x/sys/unix"
 )

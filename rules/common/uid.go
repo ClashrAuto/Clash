@@ -2,10 +2,10 @@ package common
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/process"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/common/utils"
+	"github.com/ClashrAuto/clash/component/process"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
 	"runtime"
 	"strconv"
 	"strings"

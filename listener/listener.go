@@ -2,24 +2,24 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"github.com/ClashrAuto/clash/listener/inner"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack/commons"
 	"net"
 	"sort"
 	"strconv"
 	"sync"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/config"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/http"
-	"github.com/Dreamacro/clash/listener/mixed"
-	"github.com/Dreamacro/clash/listener/redir"
-	"github.com/Dreamacro/clash/listener/socks"
-	"github.com/Dreamacro/clash/listener/tproxy"
-	"github.com/Dreamacro/clash/listener/tun"
-	"github.com/Dreamacro/clash/listener/tun/ipstack"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/adapter/inbound"
+	"github.com/ClashrAuto/clash/config"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/listener/http"
+	"github.com/ClashrAuto/clash/listener/mixed"
+	"github.com/ClashrAuto/clash/listener/redir"
+	"github.com/ClashrAuto/clash/listener/socks"
+	"github.com/ClashrAuto/clash/listener/tproxy"
+	"github.com/ClashrAuto/clash/listener/tun"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack"
+	"github.com/ClashrAuto/clash/log"
 )
 
 var (

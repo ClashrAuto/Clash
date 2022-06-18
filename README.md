@@ -30,7 +30,7 @@
 - Comprehensive HTTP RESTful API controller
 
 ## Getting Started
-Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
+Documentations are now moved to [GitHub Wiki](https://github.com/ClashrAuto/clash/wiki).
 
 ## Advanced usage for this branch
 
@@ -281,11 +281,11 @@ To display process name in GUI please use [Dashboard For Meta](https://github.co
 ## Development
 
 If you want to build an application that uses clash as a library, check out the
-the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
+the [GitHub Wiki](https://github.com/ClashrAuto/clash/wiki/use-clash-as-a-library)
 
 ## Credits
 
-* [Dreamacro/clash](https://github.com/Dreamacro/clash)
+* [Dreamacro/clash](https://github.com/ClashrAuto/clash)
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 * [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 * [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)

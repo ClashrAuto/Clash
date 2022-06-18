@@ -2,8 +2,8 @@ package http
 
 import (
 	"context"
-	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/listener/inner"
+	"github.com/ClashrAuto/clash/log"
 	"io"
 	"net"
 	"net/http"

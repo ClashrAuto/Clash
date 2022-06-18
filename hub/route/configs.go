@@ -1,18 +1,18 @@
 package route
 
 import (
-	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/dialer"
 	"net/http"
 	"path/filepath"
 	"sync"
 
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/config"
-	"github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/hub/executor"
-	P "github.com/Dreamacro/clash/listener"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel"
+	"github.com/ClashrAuto/clash/component/resolver"
+	"github.com/ClashrAuto/clash/config"
+	"github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/hub/executor"
+	P "github.com/ClashrAuto/clash/listener"
+	"github.com/ClashrAuto/clash/log"
+	"github.com/ClashrAuto/clash/tunnel"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"

@@ -2,8 +2,8 @@ package logic
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/rules/common"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/rules/common"
 )
 
 type NOT struct {

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/queue"
-	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/ClashrAuto/clash/common/queue"
+	"github.com/ClashrAuto/clash/component/dialer"
+	C "github.com/ClashrAuto/clash/constant"
 	"github.com/VividCortex/ewma"
 
 	"go.uber.org/atomic"
@@ -74,6 +74,13 @@ func (p *Proxy) DelayHistory() []C.DelayHistory {
 		histories = append(histories, item)
 	}
 	return histories
+}
+
+// PutHistory implements C.Proxy
+func (p *Proxy) PutHistory(his []C.DelayHistory) {
+	for _, h := range his {
+		p.history.Put(h)
+	}
 }
 
 // LastDelay return last history record. if proxy is not alive, return the max value of uint16.

@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/dialer"
 )
 
 // Adapter Type
@@ -124,6 +124,7 @@ type Proxy interface {
 	ProxyAdapter
 	Alive() bool
 	DelayHistory() []DelayHistory
+	PutHistory([]DelayHistory)
 	LastDelay() uint16
 	URLTest(ctx context.Context, url string) (uint16, error)
 

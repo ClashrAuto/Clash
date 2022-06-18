@@ -1,9 +1,9 @@
 package provider
 
 import (
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/component/trie"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
 )
 
 type ipcidrStrategy struct {

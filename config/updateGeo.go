@@ -2,9 +2,9 @@ package config
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/geodata"
-	_ "github.com/Dreamacro/clash/component/geodata/standard"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/ClashrAuto/clash/component/geodata"
+	_ "github.com/ClashrAuto/clash/component/geodata/standard"
+	C "github.com/ClashrAuto/clash/constant"
 	"github.com/oschwald/geoip2-golang"
 	"io/ioutil"
 	"net/http"

@@ -2,14 +2,14 @@ package common
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/geodata/router"
+	"github.com/ClashrAuto/clash/component/geodata"
+	"github.com/ClashrAuto/clash/component/geodata/router"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/mmdb"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/component/mmdb"
+	"github.com/ClashrAuto/clash/component/resolver"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
 )
 
 type GEOIP struct {

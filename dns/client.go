@@ -9,8 +9,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/ClashrAuto/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/resolver"
 
 	D "github.com/miekg/dns"
 )
