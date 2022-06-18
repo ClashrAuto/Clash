@@ -98,6 +98,21 @@ func (p *Proxy) LastDelay() (delay uint16) {
 	return history.Delay
 }
 
+// LastDelay return last history record. if proxy is not alive, return the max value of uint16.
+// implements C.Proxy
+func (p *Proxy) LastSpeed() (delay float64) {
+	var max float64 = 0xffff
+	if !p.alive.Load() {
+		return max
+	}
+
+	history := p.history.Last()
+	if history.Delay == 0 {
+		return max
+	}
+	return history.Speed
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (p *Proxy) MarshalJSON() ([]byte, error) {
 	inner, err := p.ProxyAdapter.MarshalJSON()

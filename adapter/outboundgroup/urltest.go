@@ -62,8 +62,19 @@ func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
 func (u *URLTest) fast(touch bool) C.Proxy {
 	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
+
+		// 检测所有代理是否有下载速度测试
+		var proxyFromSpeed []C.Proxy
+		for _, p := range proxies {
+
+			if p.LastSpeed() > 0 {
+				proxyFromSpeed = append(proxyFromSpeed, p)
+			}
+		}
+
 		fast := proxies[0]
 		min := fast.LastDelay()
+		max := fast.LastSpeed()
 		fastNotExist := true
 
 		for _, proxy := range proxies[1:] {
@@ -75,6 +86,12 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				continue
 			}
 
+			speed := proxy.LastSpeed()
+			if speed > max {
+				fast = proxy
+				max = speed
+			}
+
 			delay := proxy.LastDelay()
 			if delay < min {
 				fast = proxy
@@ -82,9 +99,16 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 			}
 		}
 
-		// tolerance
-		if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance {
-			u.fastNode = fast
+		if max > 0 {
+			// tolerance
+			if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastSpeed() < fast.LastSpeed() {
+				u.fastNode = fast
+			}
+		} else {
+			// tolerance
+			if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance {
+				u.fastNode = fast
+			}
 		}
 
 		return u.fastNode, nil
