@@ -107,7 +107,7 @@ func (p *Proxy) LastSpeed() (delay float64) {
 	}
 
 	history := p.history.Last()
-	if history.Delay == 0 {
+	if history.Speed == 0 {
 		return max
 	}
 	return history.Speed
