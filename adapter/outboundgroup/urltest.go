@@ -86,16 +86,16 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				continue
 			}
 
-			speed := proxy.LastSpeed()
-			if speed > max {
-				fast = proxy
-				max = speed
-			}
-
 			delay := proxy.LastDelay()
 			if delay < min {
 				fast = proxy
 				min = delay
+			}
+
+			speed := proxy.LastSpeed()
+			if speed > max {
+				fast = proxy
+				max = speed
 			}
 		}
 
