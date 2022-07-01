@@ -3,6 +3,7 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+	"github.com/ClashrAuto/clash/log"
 	"time"
 
 	"github.com/ClashrAuto/clash/adapter/outbound"
@@ -60,6 +61,13 @@ func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
+
+	//cfg, err := executor.ParseWithPath(C.Path.Config())
+	//if err != nil {
+	//}
+
+	//speedTest := cfg.General.SpeedTest
+
 	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
 
@@ -72,9 +80,12 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 			}
 		}
 
-		fast := proxies[0]
-		min := fast.LastDelay()
-		max := fast.LastSpeed()
+		log.Debugln("has speed test proxy -> %d", len(proxyFromSpeed))
+
+		fastd := proxies[0]
+		fasts := proxies[0]
+		min := fastd.LastDelay()
+		max := fasts.LastSpeed()
 		fastNotExist := true
 
 		for _, proxy := range proxies[1:] {
@@ -86,28 +97,42 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				continue
 			}
 
-			delay := proxy.LastDelay()
-			if delay < min {
-				fast = proxy
-				min = delay
+			if len(proxyFromSpeed) > 0 {
+				speed := proxy.LastSpeed()
+				if speed > max {
+					fasts = proxy
+					max = speed
+				}
+			} else {
+				delay := proxy.LastDelay()
+				if delay < min {
+					fastd = proxy
+					min = delay
+				}
 			}
 
-			speed := proxy.LastSpeed()
-			if speed > max {
-				fast = proxy
-				max = speed
-			}
+			//if speed > 0 {
+			//	if speed > max {
+			//		fast = proxy
+			//		max = speed
+			//	}
+			//} else {
+			//	if delay < min {
+			//		fast = proxy
+			//		min = delay
+			//	}
+			//}
 		}
 
-		if max > 0 {
+		if len(proxyFromSpeed) > 0 {
 			// tolerance
-			if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastSpeed() < fast.LastSpeed()-float64(u.tolerance) {
-				u.fastNode = fast
+			if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastSpeed() < fasts.LastSpeed()-float64(u.tolerance) {
+				u.fastNode = fasts
 			}
 		} else {
 			// tolerance
-			if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance {
-				u.fastNode = fast
+			if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fastd.LastDelay()+u.tolerance { // || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance
+				u.fastNode = fastd
 			}
 		}
 

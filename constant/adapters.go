@@ -128,13 +128,13 @@ type Proxy interface {
 	LastDelay() uint16
 	LastSpeed() float64
 	URLTest(ctx context.Context, url string) (uint16, error)
+	URLDownload(timeout int, url string) (float64, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)
 
 	// Deprecated: use DialPacketConn instead.
 	DialUDP(metadata *Metadata) (PacketConn, error)
-	URLDownload(timeout int, url string) (float64, error)
 }
 
 // AdapterType is enum of adapter type

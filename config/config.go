@@ -55,6 +55,7 @@ type General struct {
 	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
 	Sniffing      bool         `json:"sniffing"`
+	SpeedTest     bool         `json:"speed-test"`
 }
 
 // Inbound config
@@ -74,6 +75,7 @@ type Controller struct {
 	ExternalController string `json:"-"`
 	ExternalUI         string `json:"-"`
 	Secret             string `json:"-"`
+	SpeedTest          bool   `json:"-"`
 }
 
 // DNS config
@@ -223,6 +225,7 @@ type RawConfig struct {
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
+	SpeedTest     bool                      `yaml:"speed-test"`
 }
 
 type RawGeoXUrl struct {
@@ -321,6 +324,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Mmdb:    "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb",
 			GeoSite: "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat",
 		},
+		SpeedTest: false,
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
@@ -427,6 +431,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
 		EnableProcess: cfg.EnableProcess,
+		SpeedTest:     cfg.SpeedTest,
 	}, nil
 }
 

@@ -100,8 +100,8 @@ func (p *Proxy) LastDelay() (delay uint16) {
 
 // LastDelay return last history record. if proxy is not alive, return the max value of uint16.
 // implements C.Proxy
-func (p *Proxy) LastSpeed() (delay float64) {
-	var max float64 = 0xffff
+func (p *Proxy) LastSpeed() (speed float64) {
+	var max float64 = 0
 	if !p.alive.Load() {
 		return max
 	}
