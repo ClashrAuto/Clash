@@ -6,10 +6,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
-	"github.com/Dreamacro/clash/log"
+	"github.com/ClashrAuto/clash/common/pool"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack/gvisor/adapter"
+	"github.com/ClashrAuto/clash/listener/tun/ipstack/gvisor/option"
+	"github.com/ClashrAuto/clash/log"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"

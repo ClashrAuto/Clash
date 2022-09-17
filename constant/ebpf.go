@@ -3,7 +3,7 @@ package constant
 import (
 	"net/netip"
 
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/ClashrAuto/clash/transport/socks5"
 )
 
 const (

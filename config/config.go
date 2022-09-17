@@ -235,6 +235,7 @@ type RawConfig struct {
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
+	SpeedTest     bool                      `yaml:"speed-test"`
 }
 
 type RawGeoXUrl struct {

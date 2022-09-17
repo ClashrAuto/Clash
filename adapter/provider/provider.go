@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/convert"
-	"github.com/Dreamacro/clash/component/resource"
+	"github.com/ClashrAuto/clash/common/convert"
+	"github.com/ClashrAuto/clash/component/resource"
 	"github.com/dlclark/regexp2"
 	"runtime"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter"
-	C "github.com/Dreamacro/clash/constant"
-	types "github.com/Dreamacro/clash/constant/provider"
+	"github.com/ClashrAuto/clash/adapter"
+	C "github.com/ClashrAuto/clash/constant"
+	types "github.com/ClashrAuto/clash/constant/provider"
 
 	"gopkg.in/yaml.v3"
 )

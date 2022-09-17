@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
-	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/ClashrAuto/clash/common/singledo"
 	"time"
 
 	"github.com/ClashrAuto/clash/common/batch"

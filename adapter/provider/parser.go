@@ -3,7 +3,7 @@ package provider
 import (
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/component/resource"
+	"github.com/ClashrAuto/clash/component/resource"
 	"time"
 
 	"github.com/ClashrAuto/clash/common/structure"

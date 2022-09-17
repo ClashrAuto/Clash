@@ -1,4 +1,4 @@
-module github.com/Dreamacro/clash
+module github.com/ClashrAuto/clash
 
 go 1.19
 
@@ -47,6 +47,7 @@ replace github.com/vishvananda/netlink => github.com/MetaCubeX/netlink v1.2.0-be
 replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.28.1-0.20220706211558-7780039ad599
 
 require (
+	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/cheekybits/genny v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect

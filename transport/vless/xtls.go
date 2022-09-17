@@ -2,7 +2,7 @@ package vless
 
 import (
 	"context"
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	tlsC "github.com/ClashrAuto/clash/component/tls"
 	"net"
 
 	C "github.com/ClashrAuto/clash/constant"

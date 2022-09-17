@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	tlsC "github.com/ClashrAuto/clash/component/tls"
 	"go.uber.org/atomic"
 	"net"
 	"net/netip"

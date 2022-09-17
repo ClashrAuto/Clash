@@ -8,11 +8,11 @@ import (
 
 	"github.com/vishvananda/netlink"
 
-	"github.com/Dreamacro/clash/common/cmd"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/ebpf/redir"
-	"github.com/Dreamacro/clash/component/ebpf/tc"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/ClashrAuto/clash/common/cmd"
+	"github.com/ClashrAuto/clash/component/dialer"
+	"github.com/ClashrAuto/clash/component/ebpf/redir"
+	"github.com/ClashrAuto/clash/component/ebpf/tc"
+	C "github.com/ClashrAuto/clash/constant"
 )
 
 // NewTcEBpfProgram new redirect to tun ebpf program

@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	tlsC "github.com/ClashrAuto/clash/component/tls"
 	"io"
 	"net"
 	"strconv"

@@ -9,7 +9,7 @@
   <a href="https://goreportcard.com/report/github.com/Clash-Mini/Clash.Meta">
     <img src="https://goreportcard.com/badge/github.com/Clash-Mini/Clash.Meta?style=flat-square">
   </a>
-  <img src="https://img.shields.io/github/go-mod/go-version/Dreamacro/clash?style=flat-square">
+  <img src="https://img.shields.io/github/go-mod/go-version/ClashrAuto/clash?style=flat-square">
   <a href="https://github.com/Clash-Mini/Clash.Meta/releases">
     <img src="https://img.shields.io/github/release/Clash-Mini/Clash.Meta/all.svg?style=flat-square">
   </a>
@@ -285,7 +285,7 @@ the [GitHub Wiki](https://github.com/ClashrAuto/clash/wiki/use-clash-as-a-librar
 
 ## Credits
 
-* [Dreamacro/clash](https://github.com/ClashrAuto/clash)
+* [ClashrAuto/clash](https://github.com/ClashrAuto/clash)
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 * [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 * [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
@@ -295,4 +295,4 @@ the [GitHub Wiki](https://github.com/ClashrAuto/clash/wiki/use-clash-as-a-librar
 
 This software is released under the GPL-3.0 license.
 
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_large)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FClashrAuto%2Fclash.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FClashrAuto%2Fclash?ref=badge_large)
