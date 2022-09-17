@@ -2,33 +2,33 @@ package executor
 
 import (
 	"fmt"
-	"github.com/ClashrAuto/clash/component/process"
-	"github.com/ClashrAuto/clash/listener/inner"
+	"github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
 	"runtime"
 	"sync"
 
-	"github.com/ClashrAuto/clash/adapter"
-	"github.com/ClashrAuto/clash/adapter/outboundgroup"
-	"github.com/ClashrAuto/clash/component/auth"
-	"github.com/ClashrAuto/clash/component/dialer"
-	G "github.com/ClashrAuto/clash/component/geodata"
-	"github.com/ClashrAuto/clash/component/iface"
-	"github.com/ClashrAuto/clash/component/profile"
-	"github.com/ClashrAuto/clash/component/profile/cachefile"
-	"github.com/ClashrAuto/clash/component/resolver"
-	SNI "github.com/ClashrAuto/clash/component/sniffer"
-	"github.com/ClashrAuto/clash/component/trie"
-	"github.com/ClashrAuto/clash/config"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/constant/provider"
-	"github.com/ClashrAuto/clash/dns"
-	P "github.com/ClashrAuto/clash/listener"
-	authStore "github.com/ClashrAuto/clash/listener/auth"
-	"github.com/ClashrAuto/clash/listener/tproxy"
-	"github.com/ClashrAuto/clash/log"
-	"github.com/ClashrAuto/clash/tunnel"
+	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/outboundgroup"
+	"github.com/Dreamacro/clash/component/auth"
+	"github.com/Dreamacro/clash/component/dialer"
+	G "github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/iface"
+	"github.com/Dreamacro/clash/component/profile"
+	"github.com/Dreamacro/clash/component/profile/cachefile"
+	"github.com/Dreamacro/clash/component/resolver"
+	SNI "github.com/Dreamacro/clash/component/sniffer"
+	"github.com/Dreamacro/clash/component/trie"
+	"github.com/Dreamacro/clash/config"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/dns"
+	P "github.com/Dreamacro/clash/listener"
+	authStore "github.com/Dreamacro/clash/listener/auth"
+	"github.com/Dreamacro/clash/listener/tproxy"
+	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/tunnel"
 )
 
 var mux sync.Mutex
@@ -73,7 +73,7 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
-
+	preUpdateExperimental(cfg)
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
@@ -127,7 +127,17 @@ func GetGeneral() *config.General {
 	return general
 }
 
-func updateExperimental(c *config.Config) {}
+func updateExperimental(c *config.Config) {
+	runtime.GC()
+}
+
+func preUpdateExperimental(c *config.Config) {
+	for _, fingerprint := range c.Experimental.Fingerprints {
+		if err := tls.AddCertFingerprint(fingerprint); err != nil {
+			log.Warnln("fingerprint[%s] is err, %s", fingerprint, err.Error())
+		}
+	}
+}
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
@@ -250,6 +260,7 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 
 func updateTun(tun *config.Tun) {
 	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
+	P.ReCreateRedirToTun(tun.RedirectToTun)
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
@@ -273,9 +284,8 @@ func updateSniffer(sniffer *config.Sniffer) {
 }
 
 func updateGeneral(general *config.General, force bool) {
-	log.SetLevel(general.LogLevel)
-	process.EnableFindProcess(general.EnableProcess)
 	tunnel.SetMode(general.Mode)
+	tunnel.SetAlwaysFindProcess(general.EnableProcess)
 	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {
 		log.Infoln("Use IPv6")
@@ -315,12 +325,15 @@ func updateGeneral(general *config.General, force bool) {
 	bindAddress := general.BindAddress
 	P.SetBindAddress(bindAddress)
 
+	P.SetInboundTfo(general.InboundTfo)
+
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
 	P.ReCreateHTTP(general.Port, tcpIn)
 	P.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
 	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
+	P.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 }

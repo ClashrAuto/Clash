@@ -1,4 +1,4 @@
-NAME=Clash.Auto
+NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
@@ -152,3 +152,11 @@ lint:
 
 clean:
 	rm $(BINDIR)/*
+
+CLANG ?= clang-14
+CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
+
+ebpf: export BPF_CLANG := $(CLANG)
+ebpf: export BPF_CFLAGS := $(CFLAGS)
+ebpf:
+	cd component/ebpf/ && go generate ./...

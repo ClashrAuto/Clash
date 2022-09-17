@@ -1,15 +1,15 @@
 package inbound
 
 import (
+	"github.com/Dreamacro/clash/common/nnip"
 	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
 	"strings"
 
-	"github.com/ClashrAuto/clash/common/nnip"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/transport/socks5"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 func parseSocksAddr(target socks5.Addr) *C.Metadata {
@@ -26,7 +26,8 @@ func parseSocksAddr(target socks5.Addr) *C.Metadata {
 		metadata.DstIP = nnip.IpToAddr(net.IP(target[1 : 1+net.IPv4len]))
 		metadata.DstPort = strconv.Itoa((int(target[1+net.IPv4len]) << 8) | int(target[1+net.IPv4len+1]))
 	case socks5.AtypIPv6:
-		metadata.DstIP = nnip.IpToAddr(net.IP(target[1 : 1+net.IPv6len]))
+		ip6, _ := netip.AddrFromSlice(target[1 : 1+net.IPv6len])
+		metadata.DstIP = ip6.Unmap()
 		metadata.DstPort = strconv.Itoa((int(target[1+net.IPv6len]) << 8) | int(target[1+net.IPv6len+1]))
 	}
 

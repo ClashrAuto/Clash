@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/ClashrAuto/clash/common/queue"
@@ -44,11 +43,6 @@ func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 // DialContext implements C.ProxyAdapter
 func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	conn, err := p.ProxyAdapter.DialContext(ctx, metadata, opts...)
-	wasCancel := false
-	if err != nil {
-		wasCancel = strings.Contains(err.Error(), "operation was canceled")
-	}
-	p.alive.Store(err == nil || wasCancel)
 	return conn, err
 }
 
@@ -62,7 +56,6 @@ func (p *Proxy) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 // ListenPacketContext implements C.ProxyAdapter
 func (p *Proxy) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	pc, err := p.ProxyAdapter.ListenPacketContext(ctx, metadata, opts...)
-	p.alive.Store(err == nil)
 	return pc, err
 }
 
@@ -178,25 +171,32 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	}
 
 	client := http.Client{
+		Timeout:   30 * time.Second,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
+
 	defer client.CloseIdleConnections()
+
 	resp, err := client.Do(req)
+
 	if err != nil {
 		return
 	}
 
+	_ = resp.Body.Close()
+
 	if unifiedDelay {
-		start = time.Now()
+		second := time.Now()
 		resp, err = client.Do(req)
-		if err != nil {
-			return
+		if err == nil {
+			_ = resp.Body.Close()
+			start = second
 		}
 	}
-	_ = resp.Body.Close()
+
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }

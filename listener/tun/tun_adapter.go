@@ -2,19 +2,18 @@ package tun
 
 import (
 	"fmt"
-	"github.com/ClashrAuto/clash/adapter/inbound"
-	"github.com/ClashrAuto/clash/common/cmd"
-	"github.com/ClashrAuto/clash/component/process"
-	"github.com/ClashrAuto/clash/config"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/listener/tun/device"
-	"github.com/ClashrAuto/clash/listener/tun/device/fdbased"
-	"github.com/ClashrAuto/clash/listener/tun/device/tun"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack/commons"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack/gvisor"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack/system"
-	"github.com/ClashrAuto/clash/log"
+	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/common/cmd"
+	"github.com/Dreamacro/clash/config"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/device/fdbased"
+	"github.com/Dreamacro/clash/listener/tun/device/tun"
+	"github.com/Dreamacro/clash/listener/tun/ipstack"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/system"
+	"github.com/Dreamacro/clash/log"
 	"net/netip"
 	"net/url"
 	"runtime"
@@ -44,8 +43,6 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 	if !tunAddress.IsValid() || !tunAddress.Addr().Is4() {
 		tunAddress = netip.MustParsePrefix("198.18.0.1/16")
 	}
-
-	process.AppendLocalIPs(tunAddress.Masked().Addr().Next())
 
 	// open tun device
 	tunDevice, err = parseDevice(devName, uint32(mtu))
@@ -106,9 +103,9 @@ func generateDeviceName() string {
 	case "darwin":
 		return tun.Driver + "://utun"
 	case "windows":
-		return tun.Driver + "://Meta"
+		return tun.Driver + "://Auto"
 	default:
-		return tun.Driver + "://Meta"
+		return tun.Driver + "://Auto"
 	}
 }
 
