@@ -14,7 +14,7 @@ RUN go mod download &&\
     mv ./bin/Clash.Auto-docker /clash
 
 FROM alpine:latest
-LABEL org.opencontainers.image.source="https://github.com/MetaCubeX/Clash.Meta"
+LABEL org.opencontainers.image.source="https://github.com/ClashrAuto/Clash"
 
 RUN apk add --no-cache ca-certificates tzdata
 

@@ -1,4 +1,4 @@
-NAME=Clash.Meta
+NAME=Clash.Auto
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
