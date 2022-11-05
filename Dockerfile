@@ -16,7 +16,7 @@ RUN go mod download &&\
 FROM alpine:latest
 LABEL org.opencontainers.image.source="https://github.com/ClashrAuto/Clash"
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata iptables
 
 VOLUME ["/root/.config/clash/"]
 

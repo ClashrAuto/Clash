@@ -20,7 +20,7 @@ func NewConnContext(conn net.Conn, metadata *C.Metadata) *ConnContext {
 	return &ConnContext{
 		id:       id,
 		metadata: metadata,
-		conn:     CN.NewBufferedConn(conn),
+		conn:     N.NewBufferedConn(conn),
 	}
 }
 

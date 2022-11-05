@@ -3,14 +3,13 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
-	"github.com/ClashrAuto/clash/log"
 	"time"
 
-	"github.com/ClashrAuto/clash/adapter/outbound"
-	"github.com/ClashrAuto/clash/common/singledo"
-	"github.com/ClashrAuto/clash/component/dialer"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/constant/provider"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/Dreamacro/clash/component/dialer"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 )
 
 type urlTestOption func(*URLTest)
@@ -35,12 +34,13 @@ func (u *URLTest) Now() string {
 
 // DialContext implements C.ProxyAdapter
 func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
-	c, err = u.fast(true).DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
+	proxy := u.fast(true)
+	c, err = proxy.DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
 		u.onDialSuccess()
 	} else {
-		u.onDialFailed()
+		u.onDialFailed(proxy.Type(), err)
 	}
 	return c, err
 }
@@ -56,24 +56,17 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 }
 
 // Unwrap implements C.ProxyAdapter
-func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
-	return u.fast(true)
+func (u *URLTest) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
+	return u.fast(touch)
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
-
-	//cfg, err := executor.ParseWithPath(C.Path.Config())
-	//if err != nil {
-	//}
-
-	//speedTest := cfg.General.SpeedTest
-
-	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
+	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
 
 		// 检测所有代理是否有下载速度测试
 		var proxyFromSpeed []C.Proxy
-		for _, p := range proxies {
+		for _, p := range proxies[1:] {
 
 			if p.LastSpeed() > 0 {
 				proxyFromSpeed = append(proxyFromSpeed, p)
@@ -138,6 +131,9 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 		return u.fastNode, nil
 	})
+	if shared && touch { // a shared fastSingle.Do() may cause providers untouched, so we touch them again
+		u.Touch()
+	}
 
 	return elm
 }

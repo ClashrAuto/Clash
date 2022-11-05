@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	C "github.com/ClashrAuto/clash/constant"
 	"net"
 	"strings"
+
+	C "github.com/ClashrAuto/clash/constant"
 )
 
 var (
