@@ -3,7 +3,7 @@ package context
 import (
 	"net"
 
-	CN "github.com/ClashrAuto/clash/common/net"
+	N "github.com/ClashrAuto/clash/common/net"
 	C "github.com/ClashrAuto/clash/constant"
 	"github.com/gofrs/uuid"
 )

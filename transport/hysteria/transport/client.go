@@ -7,7 +7,7 @@ import (
 	"github.com/ClashrAuto/clash/transport/hysteria/conns/faketcp"
 	"github.com/ClashrAuto/clash/transport/hysteria/conns/udp"
 	"github.com/ClashrAuto/clash/transport/hysteria/conns/wechat"
-	"github.com/ClashrAuto/clash/transport/hysteria/obfs"
+	obfsPkg "github.com/ClashrAuto/clash/transport/hysteria/obfs"
 	"github.com/lucas-clemente/quic-go"
 	"net"
 )

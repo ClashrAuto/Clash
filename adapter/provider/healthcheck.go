@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/ClashrAuto/clash/common/batch"
@@ -92,6 +94,16 @@ func (hc *HealthCheck) check() {
 				log.Debugln("Health Checked %s : %t %d ms {%s}", p.Name(), p.Alive(), p.LastDelay(), id)
 				return false, nil
 			})
+			ok, _ := regexp.MatchString(`\[speedtest\][\_0-9]{0,}$`, p.Name())
+			if C.SpeedTest && ok {
+				b.Go(p.Name(), func() (bool, error) {
+
+					speed, _ := p.URLDownload(3, "http://cachefly.cachefly.net/10mb.test")
+					fmt.Printf(`speed: %f`, speed)
+					fmt.Println("")
+					return false, nil
+				})
+			}
 		}
 
 		b.Wait()

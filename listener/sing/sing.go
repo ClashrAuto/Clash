@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/ClashrAuto/clash/adapter/inbound"
+	C "github.com/ClashrAuto/clash/constant"
+	"github.com/ClashrAuto/clash/log"
+	"github.com/ClashrAuto/clash/transport/socks5"
 
 	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/buf"

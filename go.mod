@@ -3,6 +3,7 @@ module github.com/ClashrAuto/clash
 go 1.19
 
 require (
+	github.com/VividCortex/ewma v1.2.0
 	github.com/cilium/ebpf v0.9.3
 	github.com/coreos/go-iptables v0.6.0
 	github.com/database64128/tfo-go v1.1.2
@@ -35,8 +36,12 @@ require (
 	golang.org/x/net v0.0.0-20221004154528-8021a29435af
 	golang.org/x/sync v0.0.0-20220929204114-8fcdb60fdcc0
 	golang.org/x/sys v0.0.0-20221006211917-84dc82d7e875
+	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af
+	golang.zx2c4.com/wireguard v0.0.0-20220920152132-bb719d3a6e2c
+	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
+	gvisor.dev/gvisor v0.0.0-20220901235040-6ca97ef2ce1c
 
 )
 
@@ -68,10 +73,9 @@ require (
 	github.com/vishvananda/netns v0.0.0-20220913150850-18c4f4234207 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab // indirect
-	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 	golang.org/x/tools v0.1.12 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gvisor.dev/gvisor v0.0.0-20220901235040-6ca97ef2ce1c // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )

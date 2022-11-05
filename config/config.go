@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ClashrAuto/clash/constant/sniffer"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack/commons"
 	"net"
 	"net/netip"
 	"net/url"
@@ -199,7 +197,7 @@ type IPTables struct {
 
 type Sniffer struct {
 	Enable          bool
-	Sniffers        []sniffer.Type
+	Sniffers        []snifferTypes.Type
 	Reverses        *trie.DomainTrie[bool]
 	ForceDomain     *trie.DomainTrie[bool]
 	SkipDomain      *trie.DomainTrie[bool]

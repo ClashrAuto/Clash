@@ -3,7 +3,6 @@ package sniffer
 import (
 	"errors"
 	"fmt"
-	"github.com/ClashrAuto/clash/constant/sniffer"
 	"net"
 	"net/netip"
 	"strconv"
