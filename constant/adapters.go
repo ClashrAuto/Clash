@@ -112,6 +112,7 @@ type ProxyAdapter interface {
 
 type Group interface {
 	URLTest(ctx context.Context, url string) (mp map[string]uint16, err error)
+	URLDownload(timeout int, url string) (mp map[string]float64, err error)
 	GetProxies(touch bool) []Proxy
 	Touch()
 }

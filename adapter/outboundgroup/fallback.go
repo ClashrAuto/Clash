@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/ClashrAuto/clash/adapter/outbound"
 	"github.com/ClashrAuto/clash/component/dialer"
 	C "github.com/ClashrAuto/clash/constant"
 	"github.com/ClashrAuto/clash/constant/provider"
-	"regexp"
 	"time"
 )
 
@@ -119,12 +117,13 @@ func (f *Fallback) Set(name string) error {
 		defer cancel()
 		_, _ = p.URLTest(ctx, f.testUrl)
 
-		ok, _ := regexp.MatchString(`\[speedtest\][\_0-9]{0,}$`, p.Name())
-		if C.SpeedTest && ok {
-			speed, _ := p.URLDownload(3, "http://cachefly.cachefly.net/10mb.test")
-			fmt.Printf(`speed: %f`, speed)
-			fmt.Println("")
-		}
+		//ok, _ := regexp.MatchString(`\[speedtest\][\_0-9]{0,}$`, p.Name())
+		//if ok {
+		//	speed, _ := p.URLDownload(3, "http://cachefly.cachefly.net/10mb.test")
+		//	log.Infoln("%s speed: $f", p.Name(), speed)
+		//	//fmt.Printf(`speed: %f`, speed)
+		//	//fmt.Println("")
+		//}
 	}
 
 	return nil
