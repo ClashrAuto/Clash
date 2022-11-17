@@ -65,9 +65,9 @@ func main() {
 		return
 	}
 
-	if token+10000 < now || token > now {
-		return
-	}
+	// if token+10000 < now || token > now {
+	// 	return
+	// }
 
 	if homeDir != "" {
 		if !filepath.IsAbs(homeDir) {
