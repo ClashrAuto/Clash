@@ -25,3 +25,6 @@ vendor
 test/config/cache*
 /output
 /.vscode
+
+full.yaml
+test.go
