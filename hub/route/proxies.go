@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ClashrAuto/clash/adapter"
-	"github.com/ClashrAuto/clash/adapter/outboundgroup"
-	"github.com/ClashrAuto/clash/component/profile/cachefile"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/tunnel"
+	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/outboundgroup"
+	"github.com/Dreamacro/clash/common/utils"
+	"github.com/Dreamacro/clash/component/profile/cachefile"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -71,12 +72,10 @@ func getProxy(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, proxy)
 }
 
-type UpdateProxyRequest struct {
-	Name string `json:"name"`
-}
-
 func updateProxy(w http.ResponseWriter, r *http.Request) {
-	req := UpdateProxyRequest{}
+	req := struct {
+		Name string `json:"name"`
+	}{}
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
@@ -115,12 +114,19 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	expectedStatus, err := utils.NewIntRanges[uint16](query.Get("expected"))
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	delay, err := proxy.URLTest(ctx, url)
+	delay, err := proxy.URLTest(ctx, url, expectedStatus, C.ExtraHistory)
 	if ctx.Err() != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, ErrRequestTimeout)
@@ -129,7 +135,11 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil || delay == 0 {
 		render.Status(r, http.StatusServiceUnavailable)
-		render.JSON(w, r, newError("An error occurred in the delay test"))
+		if err != nil && delay != 0 {
+			render.JSON(w, r, err)
+		} else {
+			render.JSON(w, r, newError("An error occurred in the delay test"))
+		}
 		return
 	}
 

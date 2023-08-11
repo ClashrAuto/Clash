@@ -12,24 +12,46 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ClashrAuto/clash/common/queue"
-	"github.com/ClashrAuto/clash/component/dialer"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/VividCortex/ewma"
-
-	"go.uber.org/atomic"
+	"github.com/Dreamacro/clash/common/atomic"
+	"github.com/Dreamacro/clash/common/queue"
+	"github.com/Dreamacro/clash/common/utils"
+	"github.com/Dreamacro/clash/component/dialer"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 var UnifiedDelay = atomic.NewBool(false)
+
+const (
+	defaultHistoriesNum = 10
+)
+
+type extraProxyState struct {
+	history *queue.Queue[C.DelayHistory]
+	alive   *atomic.Bool
+}
 
 type Proxy struct {
 	C.ProxyAdapter
 	history *queue.Queue[C.DelayHistory]
 	alive   *atomic.Bool
+	url     string
+	extra   map[string]*extraProxyState
 }
 
 // Alive implements C.Proxy
 func (p *Proxy) Alive() bool {
+	return p.alive.Load()
+}
+
+// AliveForTestUrl implements C.Proxy
+func (p *Proxy) AliveForTestUrl(url string) bool {
+	if p.extra != nil {
+		if state, ok := p.extra[url]; ok {
+			return state.alive.Load()
+		}
+	}
+
 	return p.alive.Load()
 }
 
@@ -76,6 +98,42 @@ func (p *Proxy) PutHistory(his []C.DelayHistory) {
 	}
 }
 
+// DelayHistoryForTestUrl implements C.Proxy
+func (p *Proxy) DelayHistoryForTestUrl(url string) []C.DelayHistory {
+	var queueM []C.DelayHistory
+	if p.extra != nil {
+		if state, ok := p.extra[url]; ok {
+			queueM = state.history.Copy()
+		}
+	}
+
+	if queueM == nil {
+		queueM = p.history.Copy()
+	}
+
+	histories := []C.DelayHistory{}
+	for _, item := range queueM {
+		histories = append(histories, item)
+	}
+	return histories
+}
+
+func (p *Proxy) ExtraDelayHistory() map[string][]C.DelayHistory {
+	extra := map[string][]C.DelayHistory{}
+	if p.extra != nil && len(p.extra) != 0 {
+		for testUrl, option := range p.extra {
+			histories := []C.DelayHistory{}
+			queueM := option.history.Copy()
+			for _, item := range queueM {
+				histories = append(histories, item)
+			}
+
+			extra[testUrl] = histories
+		}
+	}
+	return extra
+}
+
 // LastDelay return last history record. if proxy is not alive, return the max value of uint16.
 // implements C.Proxy
 func (p *Proxy) LastDelay() (delay uint16) {
@@ -106,6 +164,30 @@ func (p *Proxy) LastSpeed() (speed float64) {
 	return history.Speed
 }
 
+// LastDelayForTestUrl implements C.Proxy
+func (p *Proxy) LastDelayForTestUrl(url string) (delay uint16) {
+	var max uint16 = 0xffff
+
+	alive := p.alive.Load()
+	history := p.history.Last()
+
+	if p.extra != nil {
+		if state, ok := p.extra[url]; ok {
+			alive = state.alive.Load()
+			history = state.history.Last()
+		}
+	}
+
+	if !alive {
+		return max
+	}
+
+	if history.Delay == 0 {
+		return max
+	}
+	return history.Delay
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (p *Proxy) MarshalJSON() ([]byte, error) {
 	inner, err := p.ProxyAdapter.MarshalJSON()
@@ -116,24 +198,65 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	mapping := map[string]any{}
 	_ = json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
+	mapping["extra"] = p.ExtraDelayHistory()
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()
+	mapping["xudp"] = p.SupportXUDP()
+	mapping["tfo"] = p.SupportTFO()
 	return json.Marshal(mapping)
 }
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store C.DelayHistoryStoreType) (t uint16, err error) {
 	defer func() {
-		p.alive.Store(err == nil)
-		record := C.DelayHistory{Time: time.Now()}
-		if err == nil {
-			record.Delay = t
-			record.Speed = p.history.Last().Speed
-		}
-		p.history.Put(record)
-		if p.history.Len() > 10 {
-			p.history.Pop()
+		alive := err == nil
+		store = p.determineFinalStoreType(store, url)
+
+		switch store {
+		case C.OriginalHistory:
+			p.alive.Store(alive)
+			record := C.DelayHistory{Time: time.Now()}
+			if alive {
+				record.Delay = t
+				record.Speed = p.history.Last().Speed
+			}
+			p.history.Put(record)
+			if p.history.Len() > defaultHistoriesNum {
+				p.history.Pop()
+			}
+
+			// test URL configured by the proxy provider
+			if len(p.url) == 0 {
+				p.url = url
+			}
+		case C.ExtraHistory:
+			record := C.DelayHistory{Time: time.Now()}
+			if alive {
+				record.Delay = t
+				record.Speed = p.history.Last().Speed
+			}
+
+			if p.extra == nil {
+				p.extra = map[string]*extraProxyState{}
+			}
+
+			state, ok := p.extra[url]
+			if !ok {
+				state = &extraProxyState{
+					history: queue.New[C.DelayHistory](defaultHistoriesNum),
+					alive:   atomic.NewBool(true),
+				}
+				p.extra[url] = state
+			}
+
+			state.alive.Store(alive)
+			state.history.Put(record)
+			if state.history.Len() > defaultHistoriesNum {
+				state.history.Pop()
+			}
+		default:
+			log.Debugln("health check result will be discarded, url: %s alive: %t, delay: %d", url, alive, t)
 		}
 	}()
 
@@ -195,6 +318,11 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 			_ = resp.Body.Close()
 			start = second
 		}
+	}
+
+	if expectedStatus != nil && !expectedStatus.Check(uint16(resp.StatusCode)) {
+		// maybe another value should be returned for differentiation
+		err = errors.New("response status is inconsistent with the expected status")
 	}
 
 	t = uint16(time.Since(start) / time.Millisecond)
@@ -309,7 +437,7 @@ func (p *Proxy) URLDownload(timeout int, url string) (t float64, err error) {
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
-	return &Proxy{adapter, queue.New[C.DelayHistory](10), atomic.NewBool(true)}
+	return &Proxy{adapter, queue.New[C.DelayHistory](defaultHistoriesNum), atomic.NewBool(true), "", map[string]*extraProxyState{}}
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
@@ -332,10 +460,30 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 	}
 
 	addr = C.Metadata{
-		AddrType: C.AtypDomainName,
-		Host:     u.Hostname(),
-		DstIP:    netip.Addr{},
-		DstPort:  port,
+		Host:    u.Hostname(),
+		DstIP:   netip.Addr{},
+		DstPort: port,
 	}
 	return
+}
+
+func (p *Proxy) determineFinalStoreType(store C.DelayHistoryStoreType, url string) C.DelayHistoryStoreType {
+	if store != C.DropHistory {
+		return store
+	}
+
+	if len(p.url) == 0 || url == p.url {
+		return C.OriginalHistory
+	}
+
+	if p.extra == nil {
+		store = C.ExtraHistory
+	} else {
+		if _, ok := p.extra[url]; ok {
+			store = C.ExtraHistory
+		} else if len(p.extra) < 2*C.DefaultMaxHealthCheckUrlNum {
+			store = C.ExtraHistory
+		}
+	}
+	return store
 }

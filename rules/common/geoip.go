@@ -2,14 +2,14 @@ package common
 
 import (
 	"fmt"
-	"github.com/ClashrAuto/clash/component/geodata"
-	"github.com/ClashrAuto/clash/component/geodata/router"
 	"strings"
 
-	"github.com/ClashrAuto/clash/component/mmdb"
-	"github.com/ClashrAuto/clash/component/resolver"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/log"
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/geodata/router"
+	"github.com/Dreamacro/clash/component/mmdb"
+	"github.com/Dreamacro/clash/component/resolver"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 type GEOIP struct {
@@ -71,6 +71,11 @@ func (g *GEOIP) GetRecodeSize() int {
 }
 
 func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) {
+	if err := geodata.InitGeoIP(); err != nil {
+		log.Errorln("can't initial GeoIP: %s", err)
+		return nil, err
+	}
+
 	if !C.GeodataMode || strings.EqualFold(country, "LAN") {
 		geoip := &GEOIP{
 			Base:        &Base{},

@@ -13,12 +13,15 @@ const (
 	SrcIPSuffix
 	SrcPort
 	DstPort
+	InPort
+	InUser
+	InName
+	InType
 	Process
 	ProcessPath
 	RuleSet
 	Network
 	Uid
-	INTYPE
 	SubRules
 	MATCH
 	AND
@@ -52,6 +55,14 @@ func (rt RuleType) String() string {
 		return "SrcPort"
 	case DstPort:
 		return "DstPort"
+	case InPort:
+		return "InPort"
+	case InUser:
+		return "InUser"
+	case InName:
+		return "InName"
+	case InType:
+		return "InType"
 	case Process:
 		return "Process"
 	case ProcessPath:
@@ -64,8 +75,6 @@ func (rt RuleType) String() string {
 		return "Network"
 	case Uid:
 		return "Uid"
-	case INTYPE:
-		return "InType"
 	case SubRules:
 		return "SubRules"
 	case AND:

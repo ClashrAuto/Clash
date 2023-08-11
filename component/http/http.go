@@ -2,18 +2,19 @@ package http
 
 import (
 	"context"
-	"github.com/ClashrAuto/clash/component/tls"
-	"github.com/ClashrAuto/clash/listener/inner"
 	"io"
 	"net"
 	"net/http"
 	URL "net/url"
 	"strings"
 	"time"
+
+	"github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/listener/inner"
 )
 
 const (
-	UA = "Clash"
+	UA = "Clash.auto"
 )
 
 func HttpRequest(ctx context.Context, url, method string, header map[string][]string, body io.Reader) (*http.Response, error) {
@@ -52,8 +53,12 @@ func HttpRequest(ctx context.Context, url, method string, header map[string][]st
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			conn := inner.HandleTcp(address, urlRes.Hostname())
-			return conn, nil
+			if conn, err := inner.HandleTcp(address); err == nil {
+				return conn, nil
+			} else {
+				d := net.Dialer{}
+				return d.DialContext(ctx, network, address)
+			}
 		},
 		TLSClientConfig: tls.GetDefaultTLSConfig(),
 	}

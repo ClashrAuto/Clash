@@ -3,38 +3,54 @@ package outboundgroup
 import (
 	"context"
 	"fmt"
-	"github.com/ClashrAuto/clash/adapter/outbound"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/constant/provider"
-	types "github.com/ClashrAuto/clash/constant/provider"
-	"github.com/ClashrAuto/clash/log"
-	"github.com/ClashrAuto/clash/tunnel"
-	"github.com/dlclark/regexp2"
-	"go.uber.org/atomic"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/common/atomic"
+	"github.com/Dreamacro/clash/common/utils"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
+	types "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/tunnel"
+
+	"github.com/dlclark/regexp2"
 )
 
 type GroupBase struct {
 	*outbound.Base
-	filterRegs    []*regexp2.Regexp
-	providers     []provider.ProxyProvider
-	failedTestMux sync.Mutex
-	failedTimes   int
-	failedTime    time.Time
-	failedTesting *atomic.Bool
-	proxies       [][]C.Proxy
-	versions      []atomic.Uint32
+	filterRegs       []*regexp2.Regexp
+	excludeFilterReg *regexp2.Regexp
+	excludeTypeArray []string
+	providers        []provider.ProxyProvider
+	failedTestMux    sync.Mutex
+	failedTimes      int
+	failedTime       time.Time
+	failedTesting    *atomic.Bool
+	proxies          [][]C.Proxy
+	versions         []atomic.Uint32
 }
 
 type GroupBaseOption struct {
 	outbound.BaseOption
-	filter    string
-	providers []provider.ProxyProvider
+	filter        string
+	excludeFilter string
+	excludeType   string
+	providers     []provider.ProxyProvider
 }
 
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
+	var excludeFilterReg *regexp2.Regexp
+	if opt.excludeFilter != "" {
+		excludeFilterReg = regexp2.MustCompile(opt.excludeFilter, 0)
+	}
+	var excludeTypeArray []string
+	if opt.excludeType != "" {
+		excludeTypeArray = strings.Split(opt.excludeType, "|")
+	}
+
 	var filterRegs []*regexp2.Regexp
 	if opt.filter != "" {
 		for _, filter := range strings.Split(opt.filter, "`") {
@@ -44,10 +60,12 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	}
 
 	gb := &GroupBase{
-		Base:          outbound.NewBase(opt.BaseOption),
-		filterRegs:    filterRegs,
-		providers:     opt.providers,
-		failedTesting: atomic.NewBool(false),
+		Base:             outbound.NewBase(opt.BaseOption),
+		filterRegs:       filterRegs,
+		excludeFilterReg: excludeFilterReg,
+		excludeTypeArray: excludeTypeArray,
+		providers:        opt.providers,
+		failedTesting:    atomic.NewBool(false),
 	}
 
 	gb.proxies = make([][]C.Proxy, len(opt.providers))
@@ -63,63 +81,54 @@ func (gb *GroupBase) Touch() {
 }
 
 func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
+	var proxies []C.Proxy
 	if len(gb.filterRegs) == 0 {
-		var proxies []C.Proxy
 		for _, pd := range gb.providers {
 			if touch {
 				pd.Touch()
 			}
 			proxies = append(proxies, pd.Proxies()...)
 		}
-		if len(proxies) == 0 {
-			return append(proxies, tunnel.Proxies()["COMPATIBLE"])
-		}
-		return proxies
-	}
+	} else {
+		for i, pd := range gb.providers {
+			if touch {
+				pd.Touch()
+			}
 
-	for i, pd := range gb.providers {
-		if touch {
-			pd.Touch()
-		}
+			if pd.VehicleType() == types.Compatible {
+				gb.versions[i].Store(pd.Version())
+				gb.proxies[i] = pd.Proxies()
+				continue
+			}
 
-		if pd.VehicleType() == types.Compatible {
-			gb.versions[i].Store(pd.Version())
-			gb.proxies[i] = pd.Proxies()
-			continue
-		}
+			version := gb.versions[i].Load()
+			if version != pd.Version() && gb.versions[i].CompareAndSwap(version, pd.Version()) {
+				var (
+					proxies    []C.Proxy
+					newProxies []C.Proxy
+				)
 
-		version := gb.versions[i].Load()
-		if version != pd.Version() && gb.versions[i].CompareAndSwap(version, pd.Version()) {
-			var (
-				proxies    []C.Proxy
-				newProxies []C.Proxy
-			)
-
-			proxies = pd.Proxies()
-			proxiesSet := map[string]struct{}{}
-			for _, filterReg := range gb.filterRegs {
-				for _, p := range proxies {
-					name := p.Name()
-					if mat, _ := filterReg.FindStringMatch(name); mat != nil {
-						if _, ok := proxiesSet[name]; !ok {
-							proxiesSet[name] = struct{}{}
-							newProxies = append(newProxies, p)
+				proxies = pd.Proxies()
+				proxiesSet := map[string]struct{}{}
+				for _, filterReg := range gb.filterRegs {
+					for _, p := range proxies {
+						name := p.Name()
+						if mat, _ := filterReg.FindStringMatch(name); mat != nil {
+							if _, ok := proxiesSet[name]; !ok {
+								proxiesSet[name] = struct{}{}
+								newProxies = append(newProxies, p)
+							}
 						}
 					}
 				}
+
+				gb.proxies[i] = newProxies
 			}
-
-			gb.proxies[i] = newProxies
 		}
-	}
 
-	var proxies []C.Proxy
-	for _, p := range gb.proxies {
-		proxies = append(proxies, p...)
-	}
-
-	if len(proxies) == 0 {
-		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
+		for _, p := range gb.proxies {
+			proxies = append(proxies, p...)
+		}
 	}
 
 	if len(gb.providers) > 1 && len(gb.filterRegs) > 1 {
@@ -145,11 +154,46 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		}
 		proxies = newProxies
 	}
+	if gb.excludeTypeArray != nil {
+		var newProxies []C.Proxy
+		for _, p := range proxies {
+			mType := p.Type().String()
+			flag := false
+			for i := range gb.excludeTypeArray {
+				if strings.EqualFold(mType, gb.excludeTypeArray[i]) {
+					flag = true
+					break
+				}
+
+			}
+			if flag {
+				continue
+			}
+			newProxies = append(newProxies, p)
+		}
+		proxies = newProxies
+	}
+
+	if gb.excludeFilterReg != nil {
+		var newProxies []C.Proxy
+		for _, p := range proxies {
+			name := p.Name()
+			if mat, _ := gb.excludeFilterReg.FindStringMatch(name); mat != nil {
+				continue
+			}
+			newProxies = append(newProxies, p)
+		}
+		proxies = newProxies
+	}
+
+	if len(proxies) == 0 {
+		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
+	}
 
 	return proxies
 }
 
-func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16, error) {
+func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (map[string]uint16, error) {
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 	mp := map[string]uint16{}
@@ -158,7 +202,7 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16
 		proxy := proxy
 		wg.Add(1)
 		go func() {
-			delay, err := proxy.URLTest(ctx, url)
+			delay, err := proxy.URLTest(ctx, url, expectedStatus, C.DropHistory)
 			if err == nil {
 				lock.Lock()
 				mp[proxy.Name()] = delay

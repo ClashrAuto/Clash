@@ -1,15 +1,20 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"github.com/ClashrAuto/clash/component/geodata"
-	_ "github.com/ClashrAuto/clash/component/geodata/standard"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/oschwald/geoip2-golang"
 	"io"
 	"net/http"
 	"os"
 	"runtime"
+	"time"
+
+	"github.com/Dreamacro/clash/component/geodata"
+	_ "github.com/Dreamacro/clash/component/geodata/standard"
+	clashHttp "github.com/Dreamacro/clash/component/http"
+	C "github.com/Dreamacro/clash/constant"
+
+	"github.com/oschwald/geoip2-golang"
 )
 
 func UpdateGeoDatabases() error {
@@ -63,11 +68,15 @@ func UpdateGeoDatabases() error {
 		return fmt.Errorf("can't save GeoSite database file: %w", err)
 	}
 
+	geodata.ClearCache()
+
 	return nil
 }
 
 func downloadForBytes(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, url, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
 		return nil, err
 	}

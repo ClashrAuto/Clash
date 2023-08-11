@@ -8,17 +8,18 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	tlsC "github.com/ClashrAuto/clash/component/tls"
 	"io"
 	"net"
 	"net/http"
 	"sync"
 
-	"github.com/ClashrAuto/clash/common/pool"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/transport/socks5"
-	"github.com/ClashrAuto/clash/transport/vless"
-	"github.com/ClashrAuto/clash/transport/vmess"
+	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/pool"
+	tlsC "github.com/Dreamacro/clash/component/tls"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/Dreamacro/clash/transport/vless"
+	"github.com/Dreamacro/clash/transport/vmess"
 
 	xtls "github.com/xtls/go"
 )
@@ -47,13 +48,15 @@ const (
 )
 
 type Option struct {
-	Password       string
-	ALPN           []string
-	ServerName     string
-	SkipCertVerify bool
-	Fingerprint    string
-	Flow           string
-	FlowShow       bool
+	Password          string
+	ALPN              []string
+	ServerName        string
+	SkipCertVerify    bool
+	Fingerprint       string
+	Flow              string
+	FlowShow          bool
+	ClientFingerprint string
+	Reality           *tlsC.RealityConfig
 }
 
 type WebsocketOption struct {
@@ -68,7 +71,7 @@ type Trojan struct {
 	hexPassword []byte
 }
 
-func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
+func (t *Trojan) StreamConn(ctx context.Context, conn net.Conn) (net.Conn, error) {
 	alpn := defaultALPN
 	if len(t.option.ALPN) != 0 {
 		alpn = t.option.ALPN
@@ -83,7 +86,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 		}
 
 		if len(t.option.Fingerprint) == 0 {
-			xtlsConfig = tlsC.GetGlobalFingerprintXTLCConfig(xtlsConfig)
+			xtlsConfig = tlsC.GetGlobalXTLSConfig(xtlsConfig)
 		} else {
 			var err error
 			if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, t.option.Fingerprint); err != nil {
@@ -108,7 +111,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 		}
 
 		if len(t.option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 		} else {
 			var err error
 			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint); err != nil {
@@ -116,22 +119,38 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 			}
 		}
 
-		tlsConn := tls.Client(conn, tlsConfig)
-		if err := tlsConn.Handshake(); err != nil {
-			return nil, err
+		if len(t.option.ClientFingerprint) != 0 {
+			if t.option.Reality == nil {
+				utlsConn, valid := vmess.GetUTLSConn(conn, t.option.ClientFingerprint, tlsConfig)
+				if valid {
+					ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+					defer cancel()
+
+					err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
+					return utlsConn, err
+				}
+			} else {
+				ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+				defer cancel()
+				return tlsC.GetRealityConn(ctx, conn, t.option.ClientFingerprint, tlsConfig, t.option.Reality)
+			}
 		}
+		if t.option.Reality != nil {
+			return nil, errors.New("REALITY is based on uTLS, please set a client-fingerprint")
+		}
+
+		tlsConn := tls.Client(conn, tlsConfig)
+
 		// fix tls handshake not timeout
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 		defer cancel()
-		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			return nil, err
-		}
 
-		return tlsConn, nil
+		err := tlsConn.HandshakeContext(ctx)
+		return tlsConn, err
 	}
 }
 
-func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {
+func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {
 	alpn := defaultWebsocketALPN
 	if len(t.option.ALPN) != 0 {
 		alpn = t.option.ALPN
@@ -144,13 +163,14 @@ func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) 
 		ServerName:         t.option.ServerName,
 	}
 
-	return vmess.StreamWebsocketConn(conn, &vmess.WebsocketConfig{
-		Host:      wsOptions.Host,
-		Port:      wsOptions.Port,
-		Path:      wsOptions.Path,
-		Headers:   wsOptions.Headers,
-		TLS:       true,
-		TLSConfig: tlsConfig,
+	return vmess.StreamWebsocketConn(ctx, conn, &vmess.WebsocketConfig{
+		Host:              wsOptions.Host,
+		Port:              wsOptions.Port,
+		Path:              wsOptions.Path,
+		Headers:           wsOptions.Headers,
+		TLS:               true,
+		TLSConfig:         tlsConfig,
+		ClientFingerprint: t.option.ClientFingerprint,
 	})
 }
 
@@ -284,6 +304,8 @@ func New(option *Option) *Trojan {
 	return &Trojan{option, hexSha224([]byte(option.Password))}
 }
 
+var _ N.EnhancePacketConn = (*PacketConn)(nil)
+
 type PacketConn struct {
 	net.Conn
 	remain int
@@ -329,6 +351,49 @@ func (pc *PacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 
 	return n, addr, nil
+}
+
+func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	pc.mux.Lock()
+	defer pc.mux.Unlock()
+
+	destination, err := socks5.ReadAddr0(pc.Conn)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	addr = destination.UDPAddr()
+
+	data = pool.Get(pool.UDPBufferSize)
+	put = func() {
+		_ = pool.Put(data)
+	}
+
+	_, err = io.ReadFull(pc.Conn, data[:2+2]) // u16be length + CR LF
+	if err != nil {
+		if put != nil {
+			put()
+		}
+		return nil, nil, nil, err
+	}
+	length := binary.BigEndian.Uint16(data)
+
+	if length > 0 {
+		data = data[:length]
+		_, err = io.ReadFull(pc.Conn, data)
+		if err != nil {
+			if put != nil {
+				put()
+			}
+			return nil, nil, nil, err
+		}
+	} else {
+		if put != nil {
+			put()
+		}
+		return nil, nil, addr, nil
+	}
+
+	return
 }
 
 func hexSha224(data []byte) []byte {

@@ -10,40 +10,38 @@ import (
 )
 
 // NewSocket receive TCP inbound and return ConnContext
-func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnContext {
+func NewSocket(target socks5.Addr, conn net.Conn, source C.Type, additions ...Addition) *context.ConnContext {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = source
-	remoteAddr := conn.RemoteAddr()
-	// Filter when net.Addr interface is nil
-	if remoteAddr != nil {
-		if ip, port, err := parseAddr(remoteAddr.String()); err == nil {
-			metadata.SrcIP = ip
-			metadata.SrcPort = port
-		}
+	for _, addition := range additions {
+		addition.Apply(metadata)
+	}
+
+	if ip, port, err := parseAddr(conn.RemoteAddr()); err == nil {
+		metadata.SrcIP = ip
+		metadata.SrcPort = port
+	}
+	if ip, port, err := parseAddr(conn.LocalAddr()); err == nil {
+		metadata.InIP = ip
+		metadata.InPort = port
 	}
 
 	return context.NewConnContext(conn, metadata)
 }
 
-func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
+func NewInner(conn net.Conn, address string) *context.ConnContext {
 	metadata := &C.Metadata{}
 	metadata.NetWork = C.TCP
 	metadata.Type = C.INNER
-	metadata.DNSMode = C.DNSMapping
-	metadata.Host = host
-	metadata.AddrType = C.AtypDomainName
+	metadata.DNSMode = C.DNSNormal
 	metadata.Process = C.ClashName
-	if h, port, err := net.SplitHostPort(dst); err == nil {
+	if h, port, err := net.SplitHostPort(address); err == nil {
 		metadata.DstPort = port
-		if host == "" {
-			if ip, err := netip.ParseAddr(h); err == nil {
-				metadata.DstIP = ip
-				metadata.AddrType = C.AtypIPv4
-				if ip.Is6() {
-					metadata.AddrType = C.AtypIPv6
-				}
-			}
+		if ip, err := netip.ParseAddr(h); err == nil {
+			metadata.DstIP = ip
+		} else {
+			metadata.Host = h
 		}
 	}
 

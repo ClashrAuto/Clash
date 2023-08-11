@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -16,13 +17,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dreamacro/clash/common/buf"
+	N "github.com/Dreamacro/clash/common/net"
+	tlsC "github.com/Dreamacro/clash/component/tls"
+
 	"github.com/gorilla/websocket"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type websocketConn struct {
 	conn       *websocket.Conn
 	reader     io.Reader
 	remoteAddr net.Addr
+
+	rawWriter N.ExtendedWriter
 
 	// https://godoc.org/github.com/gorilla/websocket#hdr-Concurrency
 	rMux sync.Mutex
@@ -31,6 +39,7 @@ type websocketConn struct {
 
 type websocketWithEarlyDataConn struct {
 	net.Conn
+	wsWriter N.ExtendedWriter
 	underlay net.Conn
 	closed   bool
 	dialed   chan bool
@@ -48,6 +57,7 @@ type WebsocketConfig struct {
 	TLSConfig           *tls.Config
 	MaxEarlyData        int
 	EarlyDataHeaderName string
+	ClientFingerprint   string
 }
 
 // Read implements net.Conn.Read()
@@ -79,16 +89,65 @@ func (wsc *websocketConn) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
+	var payloadBitLength int
+	dataLen := buffer.Len()
+	data := buffer.Bytes()
+	if dataLen < 126 {
+		payloadBitLength = 1
+	} else if dataLen < 65536 {
+		payloadBitLength = 3
+	} else {
+		payloadBitLength = 9
+	}
+
+	var headerLen int
+	headerLen += 1 // FIN / RSV / OPCODE
+	headerLen += payloadBitLength
+	headerLen += 4 // MASK KEY
+
+	header := buffer.ExtendHeader(headerLen)
+	_ = header[2] // bounds check hint to compiler
+	header[0] = websocket.BinaryMessage | 1<<7
+	header[1] = 1 << 7
+
+	if dataLen < 126 {
+		header[1] |= byte(dataLen)
+	} else if dataLen < 65536 {
+		header[1] |= 126
+		binary.BigEndian.PutUint16(header[2:], uint16(dataLen))
+	} else {
+		header[1] |= 127
+		binary.BigEndian.PutUint64(header[2:], uint64(dataLen))
+	}
+
+	maskKey := fastrand.Uint32()
+	binary.LittleEndian.PutUint32(header[1+payloadBitLength:], maskKey)
+	N.MaskWebSocket(maskKey, data)
+
+	wsc.wMux.Lock()
+	defer wsc.wMux.Unlock()
+	return wsc.rawWriter.WriteBuffer(buffer)
+}
+
+func (wsc *websocketConn) FrontHeadroom() int {
+	return 14
+}
+
+func (wsc *websocketConn) Upstream() any {
+	return wsc.conn.UnderlyingConn()
+}
+
 func (wsc *websocketConn) Close() error {
-	var errors []string
+	var e []string
 	if err := wsc.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second*5)); err != nil {
-		errors = append(errors, err.Error())
+		e = append(e, err.Error())
 	}
 	if err := wsc.conn.Close(); err != nil {
-		errors = append(errors, err.Error())
+		e = append(e, err.Error())
 	}
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to close connection: %s", strings.Join(errors, ","))
+	if len(e) > 0 {
+		return fmt.Errorf("failed to close connection: %s", strings.Join(e, ","))
 	}
 	return nil
 }
@@ -135,20 +194,21 @@ func (wsedc *websocketWithEarlyDataConn) Dial(earlyData []byte) error {
 
 	earlyDataBuf := bytes.NewBuffer(earlyData)
 	if _, err := base64EarlyDataEncoder.Write(earlyDataBuf.Next(wsedc.config.MaxEarlyData)); err != nil {
-		return errors.New("failed to encode early data: " + err.Error())
+		return fmt.Errorf("failed to encode early data: %w", err)
 	}
 
 	if errc := base64EarlyDataEncoder.Close(); errc != nil {
-		return errors.New("failed to encode early data tail: " + errc.Error())
+		return fmt.Errorf("failed to encode early data tail: %w", errc)
 	}
 
 	var err error
-	if wsedc.Conn, err = streamWebsocketConn(wsedc.underlay, wsedc.config, base64DataBuf); err != nil {
+	if wsedc.Conn, err = streamWebsocketConn(wsedc.ctx, wsedc.underlay, wsedc.config, base64DataBuf); err != nil {
 		wsedc.Close()
-		return errors.New("failed to dial WebSocket: " + err.Error())
+		return fmt.Errorf("failed to dial WebSocket: %w", err)
 	}
 
 	wsedc.dialed <- true
+	wsedc.wsWriter = N.NewExtendedWriter(wsedc.Conn)
 	if earlyDataBuf.Len() != 0 {
 		_, err = wsedc.Conn.Write(earlyDataBuf.Bytes())
 	}
@@ -168,6 +228,20 @@ func (wsedc *websocketWithEarlyDataConn) Write(b []byte) (int, error) {
 	}
 
 	return wsedc.Conn.Write(b)
+}
+
+func (wsedc *websocketWithEarlyDataConn) WriteBuffer(buffer *buf.Buffer) error {
+	if wsedc.closed {
+		return io.ErrClosedPipe
+	}
+	if wsedc.Conn == nil {
+		if err := wsedc.Dial(buffer.Bytes()); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return wsedc.wsWriter.WriteBuffer(buffer)
 }
 
 func (wsedc *websocketWithEarlyDataConn) Read(b []byte) (int, error) {
@@ -228,6 +302,29 @@ func (wsedc *websocketWithEarlyDataConn) SetWriteDeadline(t time.Time) error {
 	return wsedc.Conn.SetWriteDeadline(t)
 }
 
+func (wsedc *websocketWithEarlyDataConn) FrontHeadroom() int {
+	return 14
+}
+
+func (wsedc *websocketWithEarlyDataConn) Upstream() any {
+	return wsedc.underlay
+}
+
+//func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
+//	return wsedc.Conn == nil
+//}
+//
+//func (wsedc *websocketWithEarlyDataConn) Upstream() any {
+//	if wsedc.Conn == nil { // ensure return a nil interface not an interface with nil value
+//		return nil
+//	}
+//	return wsedc.Conn
+//}
+
+func (wsedc *websocketWithEarlyDataConn) NeedHandshake() bool {
+	return wsedc.Conn == nil
+}
+
 func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	conn = &websocketWithEarlyDataConn{
@@ -237,10 +334,14 @@ func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Co
 		underlay: conn,
 		config:   c,
 	}
-	return conn, nil
+	// websocketWithEarlyDataConn can't correct handle Deadline
+	// it will not apply the already set Deadline after Dial()
+	// so call N.NewDeadlineConn to add a safe wrapper
+	return N.NewDeadlineConn(conn), nil
 }
 
-func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buffer) (net.Conn, error) {
+func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buffer) (net.Conn, error) {
+
 	dialer := &websocket.Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
 			return conn, nil
@@ -254,12 +355,30 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 	if c.TLS {
 		scheme = "wss"
 		dialer.TLSClientConfig = c.TLSConfig
+		if len(c.ClientFingerprint) != 0 {
+			if fingerprint, exists := tlsC.GetFingerprint(c.ClientFingerprint); exists {
+				dialer.NetDialTLSContext = func(_ context.Context, _, addr string) (net.Conn, error) {
+					utlsConn := tlsC.UClient(conn, c.TLSConfig, fingerprint)
+
+					if err := utlsConn.(*tlsC.UConn).WebsocketHandshake(); err != nil {
+						return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
+					}
+					return utlsConn, nil
+				}
+			}
+		}
+	}
+
+	u, err := url.Parse(c.Path)
+	if err != nil {
+		return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
 	}
 
 	uri := url.URL{
-		Scheme: scheme,
-		Host:   net.JoinHostPort(c.Host, c.Port),
-		Path:   c.Path,
+		Scheme:   scheme,
+		Host:     net.JoinHostPort(c.Host, c.Port),
+		Path:     u.Path,
+		RawQuery: u.RawQuery,
 	}
 
 	headers := http.Header{}
@@ -277,22 +396,28 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 		}
 	}
 
-	wsConn, resp, err := dialer.Dial(uri.String(), headers)
+	wsConn, resp, err := dialer.DialContext(ctx, uri.String(), headers)
 	if err != nil {
-		reason := err.Error()
+		reason := err
 		if resp != nil {
-			reason = resp.Status
+			reason = errors.New(resp.Status)
 		}
-		return nil, fmt.Errorf("dial %s error: %s", uri.Host, reason)
+		return nil, fmt.Errorf("dial %s error: %w", uri.Host, reason)
 	}
 
-	return &websocketConn{
+	conn = &websocketConn{
 		conn:       wsConn,
+		rawWriter:  N.NewExtendedWriter(wsConn.UnderlyingConn()),
 		remoteAddr: conn.RemoteAddr(),
-	}, nil
+	}
+	// websocketConn can't correct handle ReadDeadline
+	// gorilla/websocket will cache the os.ErrDeadlineExceeded from conn.Read()
+	// it will cause read fail and event panic in *websocket.Conn.NextReader()
+	// so call N.NewDeadlineConn to add a safe wrapper
+	return N.NewDeadlineConn(conn), nil
 }
 
-func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
+func StreamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 	if u, err := url.Parse(c.Path); err == nil {
 		if q := u.Query(); q.Get("ed") != "" {
 			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
@@ -309,5 +434,5 @@ func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 		return streamWebsocketWithEarlyDataConn(conn, c)
 	}
 
-	return streamWebsocketConn(conn, c, nil)
+	return streamWebsocketConn(ctx, conn, c, nil)
 }

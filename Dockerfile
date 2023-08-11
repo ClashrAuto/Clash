@@ -1,11 +1,12 @@
-FROM golang:alpine as builder
+FROM alpine:latest as builder
+ARG TARGETPLATFORM
+RUN echo "I'm building for $TARGETPLATFORM"
 
-RUN apk add --no-cache make git && \
+RUN apk add --no-cache gzip && \
     mkdir /clash-config && \
     wget -O /clash-config/Country.mmdb https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb && \
     wget -O /clash-config/geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat && \
     wget -O /clash-config/geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
-
 
 COPY . /clash-src
 WORKDIR /clash-src

@@ -8,10 +8,11 @@ import (
 )
 
 type classicalStrategy struct {
-	rules           []C.Rule
-	count           int
-	shouldResolveIP bool
-	parse           func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
+	rules             []C.Rule
+	count             int
+	shouldResolveIP   bool
+	shouldFindProcess bool
+	parse             func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
 }
 
 func (c *classicalStrategy) Match(metadata *C.Metadata) bool {
@@ -32,26 +33,41 @@ func (c *classicalStrategy) ShouldResolveIP() bool {
 	return c.shouldResolveIP
 }
 
-func (c *classicalStrategy) OnUpdate(rules []string) {
-	var classicalRules []C.Rule
-	shouldResolveIP := false
-	for _, rawRule := range rules {
-		ruleType, rule, params := ruleParse(rawRule)
-		r, err := c.parse(ruleType, rule, "", params)
-		if err != nil {
-			log.Warnln("parse rule error:[%s]", err.Error())
-		} else {
-			if !shouldResolveIP {
-				shouldResolveIP = r.ShouldResolveIP()
-			}
+func (c *classicalStrategy) ShouldFindProcess() bool {
+	return c.shouldFindProcess
+}
 
-			classicalRules = append(classicalRules, r)
-		}
+func (c *classicalStrategy) Reset() {
+	c.rules = nil
+	c.count = 0
+	c.shouldFindProcess = false
+	c.shouldResolveIP = false
+}
+
+func (c *classicalStrategy) Insert(rule string) {
+	ruleType, rule, params := ruleParse(rule)
+
+	if ruleType == "PROCESS-NAME" {
+		c.shouldFindProcess = true
 	}
 
-	c.rules = classicalRules
-	c.count = len(classicalRules)
+	r, err := c.parse(ruleType, rule, "", params)
+	if err != nil {
+		log.Warnln("parse rule error:[%s]", err.Error())
+	} else {
+		if r.ShouldResolveIP() {
+			c.shouldResolveIP = true
+		}
+		if r.ShouldFindProcess() {
+			c.shouldFindProcess = true
+		}
+
+		c.rules = append(c.rules, r)
+		c.count++
+	}
 }
+
+func (c *classicalStrategy) FinishInsert() {}
 
 func ruleParse(ruleRaw string) (string, string, []string) {
 	item := strings.Split(ruleRaw, ",")
@@ -66,7 +82,7 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 	return "", "", nil
 }
 
-func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
+func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
 	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
 		case "MATCH", "SUB-RULE":

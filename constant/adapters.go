@@ -2,11 +2,16 @@ package constant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/netip"
+	"sync"
 	"time"
 
-	"github.com/ClashrAuto/clash/component/dialer"
+	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
+	"github.com/Dreamacro/clash/component/dialer"
 )
 
 // Adapter Type
@@ -32,13 +37,18 @@ const (
 	Vless
 	Trojan
 	Hysteria
+	WireGuard
+	Tuic
 )
 
 const (
-	DefaultTCPTimeout = 5 * time.Second
-	DefaultUDPTimeout = DefaultTCPTimeout
-	DefaultTLSTimeout = DefaultTCPTimeout
+	DefaultTCPTimeout           = 5 * time.Second
+	DefaultUDPTimeout           = DefaultTCPTimeout
+	DefaultTLSTimeout           = DefaultTCPTimeout
+	DefaultMaxHealthCheckUrlNum = 16
 )
+
+var ErrNotSupport = errors.New("no support")
 
 type Connection interface {
 	Chains() Chain
@@ -69,15 +79,20 @@ func (c Chain) Last() string {
 }
 
 type Conn interface {
-	net.Conn
+	N.ExtendedConn
 	Connection
 }
 
 type PacketConn interface {
-	net.PacketConn
+	N.EnhancePacketConn
 	Connection
 	// Deprecate WriteWithMetadata because of remote resolve DNS cause TURN failed
 	// WriteWithMetadata(p []byte, metadata *Metadata) (n int, err error)
+}
+
+type Dialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+	ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error)
 }
 
 type ProxyAdapter interface {
@@ -85,17 +100,20 @@ type ProxyAdapter interface {
 	Type() AdapterType
 	Addr() string
 	SupportUDP() bool
+	SupportXUDP() bool
+	SupportTFO() bool
 	MarshalJSON() ([]byte, error)
 
+	// Deprecated: use DialContextWithDialer and ListenPacketWithDialer instead.
 	// StreamConn wraps a protocol around net.Conn with Metadata.
 	//
 	// Examples:
 	//	conn, _ := net.DialContext(context.Background(), "tcp", "host:port")
-	//	conn, _ = adapter.StreamConn(conn, metadata)
+	//	conn, _ = adapter.StreamConnContext(context.Background(), conn, metadata)
 	//
 	// It returns a C.Conn with protocol which start with
 	// a new session (if any)
-	StreamConn(c net.Conn, metadata *Metadata) (net.Conn, error)
+	StreamConnContext(ctx context.Context, c net.Conn, metadata *Metadata) (net.Conn, error)
 
 	// DialContext return a C.Conn with protocol which
 	// contains multiplexing-related reuse logic (if any)
@@ -104,14 +122,20 @@ type ProxyAdapter interface {
 
 	// SupportUOT return UDP over TCP support
 	SupportUOT() bool
-	ListenPacketOnStreamConn(c net.Conn, metadata *Metadata) (PacketConn, error)
+
+	SupportWithDialer() NetWork
+	DialContextWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (Conn, error)
+	ListenPacketWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (PacketConn, error)
+
+	// IsL3Protocol return ProxyAdapter working in L3 (tell dns module not pass the domain to avoid loopback)
+	IsL3Protocol(metadata *Metadata) bool
 
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata, touch bool) Proxy
 }
 
 type Group interface {
-	URLTest(ctx context.Context, url string) (mp map[string]uint16, err error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (mp map[string]uint16, err error)
 	URLDownload(timeout int, url string) (mp map[string]float64, err error)
 	GetProxies(touch bool) []Proxy
 	Touch()
@@ -123,15 +147,25 @@ type DelayHistory struct {
 	Speed float64   `json:"speed"`
 }
 
+type DelayHistoryStoreType int
+
+const (
+	OriginalHistory DelayHistoryStoreType = iota
+	ExtraHistory
+	DropHistory
+)
+
 type Proxy interface {
 	ProxyAdapter
 	Alive() bool
-	DelayHistory() []DelayHistory
+	AliveForTestUrl(url string) bool
 	PutHistory([]DelayHistory)
+	ExtraDelayHistory() map[string][]DelayHistory
 	LastDelay() uint16
 	LastSpeed() float64
-	URLTest(ctx context.Context, url string) (uint16, error)
 	URLDownload(timeout int, url string) (float64, error)
+	LastDelayForTestUrl(url string) uint16
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store DelayHistoryStoreType) (uint16, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)
@@ -171,6 +205,10 @@ func (at AdapterType) String() string {
 		return "Trojan"
 	case Hysteria:
 		return "Hysteria"
+	case WireGuard:
+		return "WireGuard"
+	case Tuic:
+		return "Tuic"
 
 	case Relay:
 		return "Relay"
@@ -199,11 +237,50 @@ type UDPPacket interface {
 	// - variable source IP/Port is important to STUN
 	// - if addr is not provided, WriteBack will write out UDP packet with SourceIP/Port equals to original Target,
 	//   this is important when using Fake-IP.
-	WriteBack(b []byte, addr net.Addr) (n int, err error)
+	WriteBack
 
 	// Drop call after packet is used, could recycle buffer in this function.
 	Drop()
 
 	// LocalAddr returns the source IP/Port of packet
 	LocalAddr() net.Addr
+}
+
+type UDPPacketInAddr interface {
+	InAddr() net.Addr
+}
+
+// PacketAdapter is a UDP Packet adapter for socks/redir/tun
+type PacketAdapter interface {
+	UDPPacket
+	Metadata() *Metadata
+}
+
+type WriteBack interface {
+	WriteBack(b []byte, addr net.Addr) (n int, err error)
+}
+
+type WriteBackProxy interface {
+	WriteBack
+	UpdateWriteBack(wb WriteBack)
+}
+
+type NatTable interface {
+	Set(key string, e PacketConn, w WriteBackProxy)
+
+	Get(key string) (PacketConn, WriteBackProxy)
+
+	GetOrCreateLock(key string) (*sync.Cond, bool)
+
+	Delete(key string)
+
+	GetLocalConn(lAddr, rAddr string) *net.UDPConn
+
+	AddLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
+
+	RangeLocalConn(lAddr string, f func(key, value any) bool)
+
+	GetOrCreateLockForLocalConn(lAddr, key string) (*sync.Cond, bool)
+
+	DeleteLocalConnMap(lAddr, key string)
 }

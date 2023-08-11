@@ -1,16 +1,18 @@
 package vless
 
 import (
-	"github.com/ClashrAuto/clash/common/utils"
 	"net"
 
-	"github.com/gofrs/uuid"
+	"github.com/Dreamacro/clash/common/utils"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 const (
 	XRO = "xtls-rprx-origin"
 	XRD = "xtls-rprx-direct"
 	XRS = "xtls-rprx-splice"
+	XRV = "xtls-rprx-vision"
 
 	Version byte = 0 // protocol version. preview version is 0
 )
@@ -19,6 +21,7 @@ const (
 const (
 	CommandTCP byte = 1
 	CommandUDP byte = 2
+	CommandMux byte = 3
 )
 
 // Addr types
@@ -33,7 +36,8 @@ type DstAddr struct {
 	UDP      bool
 	AddrType byte
 	Addr     []byte
-	Port     uint
+	Port     uint16
+	Mux      bool // currently used for XUDP only
 }
 
 // Client is vless connection generator

@@ -4,16 +4,18 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	tlsC "github.com/ClashrAuto/clash/component/tls"
-	"go.uber.org/atomic"
 	"net"
 	"net/netip"
 	"strings"
 
-	"github.com/ClashrAuto/clash/component/dialer"
-	"github.com/ClashrAuto/clash/component/resolver"
+	"github.com/Dreamacro/clash/common/atomic"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
+	tlsC "github.com/Dreamacro/clash/component/tls"
+	C "github.com/Dreamacro/clash/constant"
 
 	D "github.com/miekg/dns"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type client struct {
@@ -21,8 +23,29 @@ type client struct {
 	r            *Resolver
 	port         string
 	host         string
-	iface        *atomic.String
-	proxyAdapter string
+	iface        *atomic.TypedValue[string]
+	proxyAdapter C.ProxyAdapter
+	proxyName    string
+	addr         string
+}
+
+var _ dnsClient = (*client)(nil)
+
+// Address implements dnsClient
+func (c *client) Address() string {
+	if len(c.addr) != 0 {
+		return c.addr
+	}
+	schema := "udp"
+	if strings.HasPrefix(c.Client.Net, "tcp") {
+		schema = "tcp"
+		if strings.HasSuffix(c.Client.Net, "tls") {
+			schema = "tls"
+		}
+	}
+
+	c.addr = fmt.Sprintf("%s://%s", schema, net.JoinHostPort(c.host, c.port))
+	return c.addr
 }
 
 func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
@@ -34,15 +57,19 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		ip  netip.Addr
 		err error
 	)
-	if ip, err = netip.ParseAddr(c.host); err != nil {
-		if c.r == nil {
+	if c.r == nil {
+		// a default ip dns
+		if ip, err = netip.ParseAddr(c.host); err != nil {
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
-		} else {
-			if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
-				return nil, fmt.Errorf("use default dns resolve failed: %w", err)
-			}
-			c.host = ip.String()
 		}
+	} else {
+		ips, err := resolver.LookupIPWithResolver(ctx, c.host, c.r)
+		if err != nil {
+			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+		} else if len(ips) == 0 {
+			return nil, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, c.host)
+		}
+		ip = ips[fastrand.Intn(len(ips))]
 	}
 
 	network := "udp"
@@ -55,13 +82,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		options = append(options, dialer.WithInterface(c.iface.Load()))
 	}
 
-	var conn net.Conn
-	if c.proxyAdapter != "" {
-		conn, err = dialContextExtra(ctx, c.proxyAdapter, network, ip, c.port, options...)
-	} else {
-		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
-	}
-
+	conn, err := getDialHandler(c.r, c.proxyAdapter, c.proxyName, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +99,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	ch := make(chan result, 1)
 	go func() {
 		if strings.HasSuffix(c.Client.Net, "tls") {
-			conn = tls.Client(conn, tlsC.GetGlobalFingerprintTLCConfig(c.Client.TLSConfig))
+			conn = tls.Client(conn, tlsC.GetGlobalTLSConfig(c.Client.TLSConfig))
 		}
 
 		msg, _, err := c.Client.ExchangeWithConn(m, &D.Conn{

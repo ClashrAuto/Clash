@@ -17,12 +17,13 @@ import (
 	D "github.com/miekg/dns"
 
 	"github.com/sagernet/sing/common/buf"
-	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
 )
 
 const DefaultDnsReadTimeout = time.Second * 10
+const DefaultDnsRelayTimeout = time.Second * 5
 
 type ListenerHandler struct {
 	sing.ListenerHandler
@@ -69,8 +70,10 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 			}
 
 			err = func() error {
+				ctx, cancel := context.WithTimeout(ctx, DefaultDnsRelayTimeout)
+				defer cancel()
 				inData := buff[:n]
-				msg, err := RelayDnsPacket(inData)
+				msg, err := RelayDnsPacket(ctx, inData)
 				if err != nil {
 					return err
 				}
@@ -106,19 +109,44 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			defer mutex.Unlock()
 			conn2 = nil
 		}()
+
+		var buff *buf.Buffer
+		newBuffer := func() *buf.Buffer {
+			// safe size which is 1232 from https://dnsflagday.net/2020/.
+			// so 2048 is enough
+			buff = buf.NewSize(2 * 1024)
+			return buff
+		}
+		readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
+		if isReadWaiter {
+			readWaiter.InitializeReadWaiter(newBuffer)
+		}
 		for {
-			buff := buf.NewPacket()
-			dest, err := conn.ReadPacket(buff)
+			var (
+				dest M.Socksaddr
+				err  error
+			)
+			_ = conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout))
+			buff = nil // clear last loop status, avoid repeat release
+			if isReadWaiter {
+				dest, err = readWaiter.WaitReadPacket()
+			} else {
+				dest, err = conn.ReadPacket(newBuffer())
+			}
 			if err != nil {
-				buff.Release()
-				if E.IsClosed(err) {
+				if buff != nil {
+					buff.Release()
+				}
+				if sing.ShouldIgnorePacketError(err) {
 					break
 				}
 				return err
 			}
-			go func() {
+			go func(buff *buf.Buffer) {
+				ctx, cancel := context.WithTimeout(ctx, DefaultDnsRelayTimeout)
+				defer cancel()
 				inData := buff.Bytes()
-				msg, err := RelayDnsPacket(inData)
+				msg, err := RelayDnsPacket(ctx, inData)
 				if err != nil {
 					buff.Release()
 					return
@@ -139,20 +167,20 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				if err != nil {
 					return
 				}
-			}()
+			}(buff) // catch buff at goroutine create, avoid next loop change buff
 		}
 		return nil
 	}
 	return h.ListenerHandler.NewPacketConnection(ctx, conn, metadata)
 }
 
-func RelayDnsPacket(payload []byte) ([]byte, error) {
+func RelayDnsPacket(ctx context.Context, payload []byte) ([]byte, error) {
 	msg := &D.Msg{}
 	if err := msg.Unpack(payload); err != nil {
 		return nil, err
 	}
 
-	r, err := resolver.ServeMsg(msg)
+	r, err := resolver.ServeMsg(ctx, msg)
 	if err != nil {
 		m := new(D.Msg)
 		m.SetRcode(msg, D.RcodeServerFailure)

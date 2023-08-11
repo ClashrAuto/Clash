@@ -7,15 +7,19 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/ClashrAuto/clash/common/structure"
-	"github.com/ClashrAuto/clash/component/dialer"
-	C "github.com/ClashrAuto/clash/constant"
-	obfs "github.com/ClashrAuto/clash/transport/simple-obfs"
-	"github.com/ClashrAuto/clash/transport/socks5"
-	v2rayObfs "github.com/ClashrAuto/clash/transport/v2ray-plugin"
-	"github.com/sagernet/sing-shadowsocks"
-	"github.com/sagernet/sing-shadowsocks/shadowimpl"
-	"github.com/sagernet/sing/common/bufio"
+	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
+	"github.com/Dreamacro/clash/component/resolver"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/restls"
+	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
+	shadowtls "github.com/Dreamacro/clash/transport/sing-shadowtls"
+	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
+
+	restlsC "github.com/3andne/restls-client-go"
+	"github.com/metacubex/sing-shadowsocks2"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/uot"
 )
@@ -26,22 +30,26 @@ type ShadowSocks struct {
 
 	option *ShadowSocksOption
 	// obfs
-	obfsMode    string
-	obfsOption  *simpleObfsOption
-	v2rayOption *v2rayObfs.Option
+	obfsMode        string
+	obfsOption      *simpleObfsOption
+	v2rayOption     *v2rayObfs.Option
+	shadowTLSOption *shadowtls.ShadowTLSOption
+	restlsConfig    *restlsC.Config
 }
 
 type ShadowSocksOption struct {
 	BasicOption
-	Name       string         `proxy:"name"`
-	Server     string         `proxy:"server"`
-	Port       int            `proxy:"port"`
-	Password   string         `proxy:"password"`
-	Cipher     string         `proxy:"cipher"`
-	UDP        bool           `proxy:"udp,omitempty"`
-	Plugin     string         `proxy:"plugin,omitempty"`
-	PluginOpts map[string]any `proxy:"plugin-opts,omitempty"`
-	UDPOverTCP bool           `proxy:"udp-over-tcp,omitempty"`
+	Name              string         `proxy:"name"`
+	Server            string         `proxy:"server"`
+	Port              int            `proxy:"port"`
+	Password          string         `proxy:"password"`
+	Cipher            string         `proxy:"cipher"`
+	UDP               bool           `proxy:"udp,omitempty"`
+	Plugin            string         `proxy:"plugin,omitempty"`
+	PluginOpts        map[string]any `proxy:"plugin-opts,omitempty"`
+	UDPOverTCP        bool           `proxy:"udp-over-tcp,omitempty"`
+	UDPOverTCPVersion int            `proxy:"udp-over-tcp-version,omitempty"`
+	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
 }
 
 type simpleObfsOption struct {
@@ -60,8 +68,24 @@ type v2rayObfsOption struct {
 	Mux            bool              `obfs:"mux,omitempty"`
 }
 
-// StreamConn implements C.ProxyAdapter
-func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+type shadowTLSOption struct {
+	Password       string `obfs:"password"`
+	Host           string `obfs:"host"`
+	Fingerprint    string `obfs:"fingerprint,omitempty"`
+	SkipCertVerify bool   `obfs:"skip-cert-verify,omitempty"`
+	Version        int    `obfs:"version,omitempty"`
+}
+
+type restlsOption struct {
+	Password     string `obfs:"password"`
+	Host         string `obfs:"host"`
+	VersionHint  string `obfs:"version-hint"`
+	RestlsScript string `obfs:"restls-script,omitempty"`
+}
+
+// StreamConnContext implements C.ProxyAdapter
+func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	useEarly := false
 	switch ss.obfsMode {
 	case "tls":
 		c = obfs.NewTLSObfs(c, ss.obfsOption.Host)
@@ -70,60 +94,126 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		c = obfs.NewHTTPObfs(c, ss.obfsOption.Host, port)
 	case "websocket":
 		var err error
-		c, err = v2rayObfs.NewV2rayObfs(c, ss.v2rayOption)
+		c, err = v2rayObfs.NewV2rayObfs(ctx, c, ss.v2rayOption)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
+	case shadowtls.Mode:
+		var err error
+		c, err = shadowtls.NewShadowTLS(ctx, c, ss.shadowTLSOption)
+		if err != nil {
+			return nil, err
+		}
+		useEarly = true
+	case restls.Mode:
+		var err error
+		c, err = restls.NewRestls(ctx, c, ss.restlsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("%s (restls) connect error: %w", ss.addr, err)
+		}
+		useEarly = true
 	}
+	useEarly = useEarly || N.NeedHandshake(c)
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
-		return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
+		uotDestination := uot.RequestDestination(uint8(ss.option.UDPOverTCPVersion))
+		if useEarly {
+			return ss.method.DialEarlyConn(c, uotDestination), nil
+		} else {
+			return ss.method.DialConn(c, uotDestination)
+		}
 	}
-	return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+	if useEarly {
+		return ss.method.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+	} else {
+		return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+	}
 }
 
 // DialContext implements C.ProxyAdapter
 func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	c, err := dialer.DialContext(ctx, "tcp", ss.addr, ss.Base.DialOptions(opts...)...)
+	return ss.DialContextWithDialer(ctx, dialer.NewDialer(ss.Base.DialOptions(opts...)...), metadata)
+}
+
+// DialContextWithDialer implements C.ProxyAdapter
+func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(ss.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
+	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
 	tcpKeepAlive(c)
 
-	defer safeConnClose(c, err)
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
 
-	c, err = ss.StreamConn(c, metadata)
+	c, err = ss.StreamConnContext(ctx, c, metadata)
 	return NewConn(c, ss), err
 }
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	if ss.option.UDPOverTCP {
-		tcpConn, err := ss.DialContext(ctx, metadata, opts...)
+	return ss.ListenPacketWithDialer(ctx, dialer.NewDialer(ss.Base.DialOptions(opts...)...), metadata)
+}
+
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if len(ss.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
 		if err != nil {
 			return nil, err
 		}
-		return newPacketConn(uot.NewClientConn(tcpConn), ss), nil
 	}
-	pc, err := dialer.ListenPacket(ctx, "udp", "", ss.Base.DialOptions(opts...)...)
+	if ss.option.UDPOverTCP {
+		tcpConn, err := ss.DialContextWithDialer(ctx, dialer, metadata)
+		if err != nil {
+			return nil, err
+		}
+		return ss.ListenPacketOnStreamConn(ctx, tcpConn, metadata)
+	}
+	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ss.addr, ss.prefer)
 	if err != nil {
 		return nil, err
 	}
 
-	addr, err := resolveUDPAddrWithPrefer("udp", ss.addr, ss.prefer)
+	pc, err := dialer.ListenPacket(ctx, "udp", "", addr.AddrPort())
 	if err != nil {
-		pc.Close()
 		return nil, err
 	}
-	pc = ss.method.DialPacketConn(&bufio.BindPacketConn{PacketConn: pc, Addr: addr})
+	pc = ss.method.DialPacketConn(N.NewBindPacketConn(pc, addr))
 	return newPacketConn(pc, ss), nil
 }
 
+// SupportWithDialer implements C.ProxyAdapter
+func (ss *ShadowSocks) SupportWithDialer() C.NetWork {
+	return C.ALLNet
+}
+
 // ListenPacketOnStreamConn implements C.ProxyAdapter
-func (ss *ShadowSocks) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+func (ss *ShadowSocks) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	if ss.option.UDPOverTCP {
-		return newPacketConn(uot.NewClientConn(c), ss), nil
+		// ss uot use stream-oriented udp with a special address, so we need a net.UDPAddr
+		if !metadata.Resolved() {
+			ip, err := resolver.ResolveIP(ctx, metadata.Host)
+			if err != nil {
+				return nil, errors.New("can't resolve ip")
+			}
+			metadata.DstIP = ip
+		}
+
+		destination := M.SocksaddrFromNet(metadata.UDPAddr())
+		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
+			return newPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), ss), nil
+		} else {
+			return newPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), ss), nil
+		}
 	}
-	return nil, errors.New("no support")
+	return nil, C.ErrNotSupport
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -133,13 +223,17 @@ func (ss *ShadowSocks) SupportUOT() bool {
 
 func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	method, err := shadowimpl.FetchMethod(option.Cipher, option.Password)
+	method, err := shadowsocks.CreateMethod(context.Background(), option.Cipher, shadowsocks.MethodOptions{
+		Password: option.Password,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("ss %s initialize error: %w", addr, err)
 	}
 
 	var v2rayOption *v2rayObfs.Option
 	var obfsOption *simpleObfsOption
+	var shadowTLSOpt *shadowtls.ShadowTLSOption
+	var restlsConfig *restlsC.Config
 	obfsMode := ""
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "obfs", WeaklyTypedInput: true})
@@ -175,6 +269,43 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			v2rayOption.TLS = true
 			v2rayOption.SkipCertVerify = opts.SkipCertVerify
 		}
+	} else if option.Plugin == shadowtls.Mode {
+		obfsMode = shadowtls.Mode
+		opt := &shadowTLSOption{
+			Version: 2,
+		}
+		if err := decoder.Decode(option.PluginOpts, opt); err != nil {
+			return nil, fmt.Errorf("ss %s initialize shadow-tls-plugin error: %w", addr, err)
+		}
+
+		shadowTLSOpt = &shadowtls.ShadowTLSOption{
+			Password:          opt.Password,
+			Host:              opt.Host,
+			Fingerprint:       opt.Fingerprint,
+			ClientFingerprint: option.ClientFingerprint,
+			SkipCertVerify:    opt.SkipCertVerify,
+			Version:           opt.Version,
+		}
+	} else if option.Plugin == restls.Mode {
+		obfsMode = restls.Mode
+		restlsOpt := &restlsOption{}
+		if err := decoder.Decode(option.PluginOpts, restlsOpt); err != nil {
+			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
+		}
+
+		restlsConfig, err = restlsC.NewRestlsConfig(restlsOpt.Host, restlsOpt.Password, restlsOpt.VersionHint, restlsOpt.RestlsScript, option.ClientFingerprint)
+		restlsConfig.SessionTicketsDisabled = true
+		if err != nil {
+			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
+		}
+
+	}
+	switch option.UDPOverTCPVersion {
+	case uot.Version, uot.LegacyVersion:
+	case 0:
+		option.UDPOverTCPVersion = uot.LegacyVersion
+	default:
+		return nil, fmt.Errorf("ss %s unknown udp over tcp protocol version: %d", addr, option.UDPOverTCPVersion)
 	}
 
 	return &ShadowSocks{
@@ -183,48 +314,18 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			addr:   addr,
 			tp:     C.Shadowsocks,
 			udp:    option.UDP,
+			tfo:    option.TFO,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		method: method,
 
-		option:      &option,
-		obfsMode:    obfsMode,
-		v2rayOption: v2rayOption,
-		obfsOption:  obfsOption,
+		option:          &option,
+		obfsMode:        obfsMode,
+		v2rayOption:     v2rayOption,
+		obfsOption:      obfsOption,
+		shadowTLSOption: shadowTLSOpt,
+		restlsConfig:    restlsConfig,
 	}, nil
-}
-
-type ssPacketConn struct {
-	net.PacketConn
-	rAddr net.Addr
-}
-
-func (spc *ssPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
-	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddrToSocksAddr(addr), b)
-	if err != nil {
-		return
-	}
-	return spc.PacketConn.WriteTo(packet[3:], spc.rAddr)
-}
-
-func (spc *ssPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, _, e := spc.PacketConn.ReadFrom(b)
-	if e != nil {
-		return 0, nil, e
-	}
-
-	addr := socks5.SplitAddr(b[:n])
-	if addr == nil {
-		return 0, nil, errors.New("parse addr error")
-	}
-
-	udpAddr := addr.UDPAddr()
-	if udpAddr == nil {
-		return 0, nil, errors.New("parse addr error")
-	}
-
-	copy(b, b[len(addr):])
-	return n - len(addr), udpAddr, e
 }

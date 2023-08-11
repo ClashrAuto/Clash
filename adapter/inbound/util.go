@@ -1,21 +1,20 @@
 package inbound
 
 import (
-	"github.com/ClashrAuto/clash/common/nnip"
+	"errors"
 	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
 	"strings"
 
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/transport/socks5"
+	"github.com/Dreamacro/clash/common/nnip"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 func parseSocksAddr(target socks5.Addr) *C.Metadata {
-	metadata := &C.Metadata{
-		AddrType: int(target[0]),
-	}
+	metadata := &C.Metadata{}
 
 	switch target[0] {
 	case socks5.AtypDomainName:
@@ -45,29 +44,33 @@ func parseHTTPAddr(request *http.Request) *C.Metadata {
 	host = strings.TrimRight(host, ".")
 
 	metadata := &C.Metadata{
-		NetWork:  C.TCP,
-		AddrType: C.AtypDomainName,
-		Host:     host,
-		DstIP:    netip.Addr{},
-		DstPort:  port,
+		NetWork: C.TCP,
+		Host:    host,
+		DstIP:   netip.Addr{},
+		DstPort: port,
 	}
 
 	ip, err := netip.ParseAddr(host)
 	if err == nil {
-		switch {
-		case ip.Is6():
-			metadata.AddrType = C.AtypIPv6
-		default:
-			metadata.AddrType = C.AtypIPv4
-		}
 		metadata.DstIP = ip
 	}
 
 	return metadata
 }
 
-func parseAddr(addr string) (netip.Addr, string, error) {
-	host, port, err := net.SplitHostPort(addr)
+func parseAddr(addr net.Addr) (netip.Addr, string, error) {
+	// Filter when net.Addr interface is nil
+	if addr == nil {
+		return netip.Addr{}, "", errors.New("nil addr")
+	}
+	if rawAddr, ok := addr.(interface{ RawAddr() net.Addr }); ok {
+		ip, port, err := parseAddr(rawAddr.RawAddr())
+		if err == nil {
+			return ip, port, err
+		}
+	}
+	addrStr := addr.String()
+	host, port, err := net.SplitHostPort(addrStr)
 	if err != nil {
 		return netip.Addr{}, "", err
 	}

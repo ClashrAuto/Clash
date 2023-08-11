@@ -1,20 +1,26 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ClashrAuto/clash/common/convert"
-	"github.com/ClashrAuto/clash/component/resource"
-	"github.com/dlclark/regexp2"
+	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/ClashrAuto/clash/adapter"
-	C "github.com/ClashrAuto/clash/constant"
-	types "github.com/ClashrAuto/clash/constant/provider"
+	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/convert"
+	"github.com/Dreamacro/clash/common/utils"
+	clashHttp "github.com/Dreamacro/clash/component/http"
+	"github.com/Dreamacro/clash/component/resource"
+	C "github.com/Dreamacro/clash/constant"
+	types "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/tunnel/statistic"
 
+	"github.com/dlclark/regexp2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,18 +39,21 @@ type ProxySetProvider struct {
 
 type proxySetProvider struct {
 	*resource.Fetcher[[]C.Proxy]
-	proxies     []C.Proxy
-	healthCheck *HealthCheck
-	version     uint32
+	proxies          []C.Proxy
+	healthCheck      *HealthCheck
+	version          uint32
+	subscriptionInfo *SubscriptionInfo
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
-		"name":        pp.Name(),
-		"type":        pp.Type().String(),
-		"vehicleType": pp.VehicleType().String(),
-		"proxies":     pp.Proxies(),
-		"updatedAt":   pp.UpdatedAt,
+		"name":             pp.Name(),
+		"type":             pp.Type().String(),
+		"vehicleType":      pp.VehicleType().String(),
+		"proxies":          pp.Proxies(),
+		"testUrl":          pp.healthCheck.url,
+		"updatedAt":        pp.UpdatedAt,
+		"subscriptionInfo": pp.subscriptionInfo,
 	})
 }
 
@@ -74,6 +83,8 @@ func (pp *proxySetProvider) Initial() error {
 		return err
 	}
 	pp.OnUpdate(elm)
+	pp.getSubscriptionInfo()
+	pp.closeAllConnections()
 	return nil
 }
 
@@ -89,12 +100,62 @@ func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
 }
 
+func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+	pp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
+}
+
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
 	pp.healthCheck.setProxy(proxies)
 	if pp.healthCheck.auto() {
-		defer func() { go pp.healthCheck.lazyCheck() }()
+		go pp.healthCheck.check()
 	}
+}
+
+func (pp *proxySetProvider) getSubscriptionInfo() {
+	if pp.VehicleType() != types.HTTP {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+		defer cancel()
+		resp, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+
+		userInfoStr := strings.TrimSpace(resp.Header.Get("subscription-userinfo"))
+		if userInfoStr == "" {
+			resp2, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+				http.MethodGet, http.Header{"User-Agent": {"Quantumultx"}}, nil)
+			if err != nil {
+				return
+			}
+			defer resp2.Body.Close()
+			userInfoStr = strings.TrimSpace(resp2.Header.Get("subscription-userinfo"))
+			if userInfoStr == "" {
+				return
+			}
+		}
+		pp.subscriptionInfo, err = NewSubscriptionInfo(userInfoStr)
+		if err != nil {
+			log.Warnln("[Provider] get subscription-userinfo: %e", err)
+		}
+	}()
+}
+
+func (pp *proxySetProvider) closeAllConnections() {
+	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
+		for _, chain := range c.Chains() {
+			if chain == pp.Name() {
+				_ = c.Close()
+				break
+			}
+		}
+		return true
+	})
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
@@ -102,11 +163,16 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	_ = pd.Fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, excludeType string, dialerProxy string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
 	excludeFilterReg, err := regexp2.Compile(excludeFilter, 0)
 	if err != nil {
 		return nil, fmt.Errorf("invalid excludeFilter regex: %w", err)
 	}
+	var excludeTypeArray []string
+	if excludeType != "" {
+		excludeTypeArray = strings.Split(excludeType, "|")
+	}
+
 	var filterRegs []*regexp2.Regexp
 	for _, filter := range strings.Split(filter, "`") {
 		filterReg, err := regexp2.Compile(filter, 0)
@@ -125,9 +191,8 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 		healthCheck: hc,
 	}
 
-	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, filterRegs, excludeFilterReg), proxiesOnUpdate(pd))
+	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg, dialerProxy), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
-
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
 	return wrapper, nil
@@ -151,6 +216,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 		"type":        cp.Type().String(),
 		"vehicleType": cp.VehicleType().String(),
 		"proxies":     cp.Proxies(),
+		"testUrl":     cp.healthCheck.url,
 	})
 }
 
@@ -190,6 +256,10 @@ func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
 }
 
+func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+	cp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
+}
+
 func stopCompatibleProvider(pd *CompatibleProvider) {
 	pd.healthCheck.close()
 }
@@ -218,10 +288,11 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	return func(elm []C.Proxy) {
 		pd.setProxies(elm)
 		pd.version += 1
+		pd.getSubscriptionInfo()
 	}
 }
 
-func proxiesParseAndFilter(filter string, excludeFilter string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp) resource.Parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray []string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp, dialerProxy string) resource.Parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 
@@ -241,6 +312,28 @@ func proxiesParseAndFilter(filter string, excludeFilter string, filterRegs []*re
 		proxiesSet := map[string]struct{}{}
 		for _, filterReg := range filterRegs {
 			for idx, mapping := range schema.Proxies {
+				if nil != excludeTypeArray && len(excludeTypeArray) > 0 {
+					mType, ok := mapping["type"]
+					if !ok {
+						continue
+					}
+					pType, ok := mType.(string)
+					if !ok {
+						continue
+					}
+					flag := false
+					for i := range excludeTypeArray {
+						if strings.EqualFold(pType, excludeTypeArray[i]) {
+							flag = true
+							break
+						}
+
+					}
+					if flag {
+						continue
+					}
+
+				}
 				mName, ok := mapping["name"]
 				if !ok {
 					continue
@@ -261,6 +354,9 @@ func proxiesParseAndFilter(filter string, excludeFilter string, filterRegs []*re
 				}
 				if _, ok := proxiesSet[name]; ok {
 					continue
+				}
+				if len(dialerProxy) > 0 {
+					mapping["dialer-proxy"] = dialerProxy
 				}
 				proxy, err := adapter.ParseProxy(mapping)
 				if err != nil {

@@ -29,29 +29,10 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 	}
 
 	if geoIPMatcher == nil {
-		countryCode := "cn"
-		geoLoader, err := geodata.GetGeoDataLoader(geodata.LoaderName())
+		var err error
+		geoIPMatcher, _, err = geodata.LoadGeoIPMatcher("CN")
 		if err != nil {
-			log.Errorln("[GeoIPFilter] GetGeoDataLoader error: %s", err.Error())
-			return false
-		}
-
-		records, err := geoLoader.LoadGeoIP(countryCode)
-		if err != nil {
-			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
-			return false
-		}
-
-		geoIP := &router.GeoIP{
-			CountryCode:  countryCode,
-			Cidr:         records,
-			ReverseMatch: false,
-		}
-
-		geoIPMatcher, err = router.NewGeoIPMatcher(geoIP)
-
-		if err != nil {
-			log.Errorln("[GeoIPFilter] NewGeoIPMatcher error: %s", err.Error())
+			log.Errorln("[GeoIPFilter] LoadGeoIPMatcher error: %s", err.Error())
 			return false
 		}
 	}
@@ -71,14 +52,15 @@ type fallbackDomainFilter interface {
 }
 
 type domainFilter struct {
-	tree *trie.DomainTrie[bool]
+	tree *trie.DomainTrie[struct{}]
 }
 
 func NewDomainFilter(domains []string) *domainFilter {
-	df := domainFilter{tree: trie.New[bool]()}
+	df := domainFilter{tree: trie.New[struct{}]()}
 	for _, domain := range domains {
-		_ = df.tree.Insert(domain, true)
+		_ = df.tree.Insert(domain, struct{}{})
 	}
+	df.tree.Optimize()
 	return &df
 }
 
@@ -88,6 +70,21 @@ func (df *domainFilter) Match(domain string) bool {
 
 type geoSiteFilter struct {
 	matchers []*router.DomainMatcher
+}
+
+func NewGeoSite(group string) (fallbackDomainFilter, error) {
+	if err := geodata.InitGeoSite(); err != nil {
+		log.Errorln("can't initial GeoSite: %s", err)
+		return nil, err
+	}
+	matcher, _, err := geodata.LoadGeoSiteMatcher(group)
+	if err != nil {
+		return nil, err
+	}
+	filter := &geoSiteFilter{
+		matchers: []*router.DomainMatcher{matcher},
+	}
+	return filter, nil
 }
 
 func (gsf *geoSiteFilter) Match(domain string) bool {

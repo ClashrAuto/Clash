@@ -3,14 +3,16 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
-	"github.com/ClashrAuto/clash/adapter/outbound"
-	"github.com/ClashrAuto/clash/common/singledo"
-	"github.com/ClashrAuto/clash/component/dialer"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/constant/provider"
-	"github.com/ClashrAuto/clash/log"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/common/callback"
+	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/Dreamacro/clash/component/dialer"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 )
 
 type urlTestOption func(*URLTest)
@@ -23,14 +25,37 @@ func urlTestWithTolerance(tolerance uint16) urlTestOption {
 
 type URLTest struct {
 	*GroupBase
-	tolerance  uint16
-	disableUDP bool
-	fastNode   C.Proxy
-	fastSingle *singledo.Single[C.Proxy]
+	selected       string
+	testUrl        string
+	expectedStatus string
+	tolerance      uint16
+	disableUDP     bool
+	fastNode       C.Proxy
+	fastSingle     *singledo.Single[C.Proxy]
 }
 
 func (u *URLTest) Now() string {
 	return u.fast(false).Name()
+}
+
+func (u *URLTest) Set(name string) error {
+	var p C.Proxy
+	for _, proxy := range u.GetProxies(false) {
+		if proxy.Name() == name {
+			p = proxy
+			break
+		}
+	}
+	if p == nil {
+		return errors.New("proxy not exist")
+	}
+	u.selected = name
+	u.fast(false)
+	return nil
+}
+
+func (u *URLTest) ForceSet(name string) {
+	u.selected = name
 }
 
 // DialContext implements C.ProxyAdapter
@@ -39,10 +64,20 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	c, err = proxy.DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
-		u.onDialSuccess()
 	} else {
 		u.onDialFailed(proxy.Type(), err)
 	}
+
+	if N.NeedHandshake(c) {
+		c = callback.NewFirstWriteCallBackConn(c, func(err error) {
+			if err == nil {
+				u.onDialSuccess()
+			} else {
+				u.onDialFailed(proxy.Type(), err)
+			}
+		})
+	}
+
 	return c, err
 }
 
@@ -62,24 +97,24 @@ func (u *URLTest) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
-	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
-		proxies := u.GetProxies(touch)
 
-		// 检测所有代理是否有下载速度测试
-		var proxyFromSpeed []C.Proxy
-		for _, p := range proxies[1:] {
-
-			if p.LastSpeed() > 0 {
-				proxyFromSpeed = append(proxyFromSpeed, p)
+	proxies := u.GetProxies(touch)
+	if u.selected != "" {
+		for _, proxy := range proxies {
+			if !proxy.Alive() {
+				continue
+			}
+			if proxy.Name() == u.selected {
+				u.fastNode = proxy
+				return proxy
 			}
 		}
+	}
 
-		log.Debugln("has speed test proxy -> %d", len(proxyFromSpeed))
-
-		fastd := proxies[0]
-		fasts := proxies[0]
-		min := fastd.LastDelay()
-		max := fasts.LastSpeed()
+	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
+		fast := proxies[0]
+		// min := fast.LastDelay()
+		min := fast.LastDelayForTestUrl(u.testUrl)
 		fastNotExist := true
 
 		for _, proxy := range proxies[1:] {
@@ -87,7 +122,8 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				fastNotExist = false
 			}
 
-			if !proxy.Alive() {
+			// if !proxy.Alive() {
+			if !proxy.AliveForTestUrl(u.testUrl) {
 				continue
 			}
 
@@ -98,13 +134,18 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 					max = speed
 				}
 			} else {
-				delay := proxy.LastDelay()
+				delay := proxy.LastDelayForTestUrl(u.testUrl)
 				if delay < min {
 					fastd = proxy
 					min = delay
 				}
 			}
 
+		}
+		// tolerance
+		// if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance {
+		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {
+			u.fastNode = fast
 			//if speed > 0 {
 			//	if speed > max {
 			//		fast = proxy
@@ -129,7 +170,6 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				u.fastNode = fastd
 			}
 		}
-
 		return u.fastNode, nil
 	})
 	if shared && touch { // a shared fastSingle.Do() may cause providers untouched, so we touch them again
@@ -144,8 +184,12 @@ func (u *URLTest) SupportUDP() bool {
 	if u.disableUDP {
 		return false
 	}
-
 	return u.fast(false).SupportUDP()
+}
+
+// IsL3Protocol implements C.ProxyAdapter
+func (u *URLTest) IsL3Protocol(metadata *C.Metadata) bool {
+	return u.fast(false).IsL3Protocol(metadata)
 }
 
 // MarshalJSON implements C.ProxyAdapter
@@ -155,9 +199,11 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type": u.Type().String(),
-		"now":  u.Now(),
-		"all":  all,
+		"type":     u.Type().String(),
+		"now":      u.Now(),
+		"all":      all,
+		"testUrl":  u.testUrl,
+		"expected": u.expectedStatus,
 	})
 }
 
@@ -185,10 +231,14 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 			},
 
 			option.Filter,
+			option.ExcludeFilter,
+			option.ExcludeType,
 			providers,
 		}),
-		fastSingle: singledo.NewSingle[C.Proxy](time.Second * 10),
-		disableUDP: option.DisableUDP,
+		fastSingle:     singledo.NewSingle[C.Proxy](time.Second * 10),
+		disableUDP:     option.DisableUDP,
+		testUrl:        option.URL,
+		expectedStatus: option.ExpectedStatus,
 	}
 
 	for _, option := range options {

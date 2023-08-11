@@ -2,21 +2,23 @@ package sing_tun
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/netip"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/ClashrAuto/clash/adapter/inbound"
-	"github.com/ClashrAuto/clash/component/dialer"
-	"github.com/ClashrAuto/clash/component/iface"
-	"github.com/ClashrAuto/clash/config"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/listener/sing"
-	"github.com/ClashrAuto/clash/log"
+	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/iface"
+	C "github.com/Dreamacro/clash/constant"
+	LC "github.com/Dreamacro/clash/listener/config"
+	"github.com/Dreamacro/clash/listener/sing"
+	"github.com/Dreamacro/clash/log"
 
-	tun "github.com/sagernet/sing-tun"
+	tun "github.com/metacubex/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
@@ -27,9 +29,10 @@ var InterfaceName = "Meta"
 
 type Listener struct {
 	closed  bool
-	options config.Tun
+	options LC.Tun
 	handler *ListenerHandler
 	tunName string
+	addrStr string
 
 	tunIf    tun.Tun
 	tunStack tun.Stack
@@ -65,10 +68,37 @@ func CalculateInterfaceName(name string) (tunName string) {
 	return
 }
 
-func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (l *Listener, err error) {
+func checkTunName(tunName string) (ok bool) {
+	defer func() {
+		if !ok {
+			log.Warnln("[TUN] Unsupported tunName(%s) in %s, force regenerate by ourselves.", tunName, runtime.GOOS)
+		}
+	}()
+	if runtime.GOOS == "darwin" {
+		if len(tunName) <= 4 {
+			return false
+		}
+		if tunName[:4] != "utun" {
+			return false
+		}
+		if _, parseErr := strconv.ParseInt(tunName[4:], 10, 16); parseErr != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (l *Listener, err error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-TUN"),
+			inbound.WithSpecialRules(""),
+		}
+	}
 	tunName := options.Device
-	if tunName == "" {
+	if tunName == "" || !checkTunName(tunName) {
 		tunName = CalculateInterfaceName(InterfaceName)
+		options.Device = tunName
 	}
 	tunMTU := options.MTU
 	if tunMTU == 0 {
@@ -100,7 +130,16 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	var dnsAdds []netip.AddrPort
 
 	for _, d := range options.DNSHijack {
-		dnsAdds = append(dnsAdds, d)
+		if _, after, ok := strings.Cut(d, "://"); ok {
+			d = after
+		}
+		d = strings.Replace(d, "any", "0.0.0.0", 1)
+		addrPort, err := netip.ParseAddrPort(d)
+		if err != nil {
+			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
+		}
+
+		dnsAdds = append(dnsAdds, addrPort)
 	}
 	for _, a := range options.Inet4Address {
 		addrPort := netip.AddrPortFrom(a.Build().Addr().Next(), 53)
@@ -113,9 +152,11 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 
 	handler := &ListenerHandler{
 		ListenerHandler: sing.ListenerHandler{
-			TcpIn: tcpIn,
-			UdpIn: udpIn,
-			Type:  C.TUN,
+			TcpIn:      tcpIn,
+			UdpIn:      udpIn,
+			Type:       C.TUN,
+			Additions:  additions,
+			UDPTimeout: time.Second * time.Duration(udpTimeout),
 		},
 		DnsAdds: dnsAdds,
 	}
@@ -162,17 +203,18 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	tunOptions := tun.Options{
 		Name:               tunName,
 		MTU:                tunMTU,
-		Inet4Address:       common.Map(options.Inet4Address, config.ListenPrefix.Build),
-		Inet6Address:       common.Map(options.Inet6Address, config.ListenPrefix.Build),
+		Inet4Address:       common.Map(options.Inet4Address, LC.ListenPrefix.Build),
+		Inet6Address:       common.Map(options.Inet6Address, LC.ListenPrefix.Build),
 		AutoRoute:          options.AutoRoute,
 		StrictRoute:        options.StrictRoute,
-		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, config.ListenPrefix.Build),
-		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, config.ListenPrefix.Build),
+		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, LC.ListenPrefix.Build),
+		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, LC.ListenPrefix.Build),
 		IncludeUID:         includeUID,
 		ExcludeUID:         excludeUID,
 		IncludeAndroidUser: options.IncludeAndroidUser,
 		IncludePackage:     options.IncludePackage,
 		ExcludePackage:     options.ExcludePackage,
+		FileDescriptor:     options.FileDescriptor,
 		InterfaceMonitor:   defaultInterfaceMonitor,
 		TableIndex:         2022,
 	}
@@ -182,13 +224,13 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		err = E.Cause(err, "build android rules")
 		return
 	}
-	tunIf, err := tunOpen(tunOptions)
+	tunIf, err := tunNew(tunOptions)
 	if err != nil {
 		err = E.Cause(err, "configure tun interface")
 		return
 	}
-	l.tunIf = tunIf
-	l.tunStack, err = tun.NewStack(strings.ToLower(options.Stack.String()), tun.StackOptions{
+
+	stackOptions := tun.StackOptions{
 		Context:                context.TODO(),
 		Tun:                    tunIf,
 		MTU:                    tunOptions.MTU,
@@ -198,16 +240,29 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		EndpointIndependentNat: options.EndpointIndependentNat,
 		UDPTimeout:             udpTimeout,
 		Handler:                handler,
-		Logger:                 sing.Logger,
-	})
+		Logger:                 log.SingLogger,
+	}
+
+	if options.FileDescriptor > 0 {
+		if tunName, err := getTunnelName(int32(options.FileDescriptor)); err != nil {
+			stackOptions.Name = tunName
+			stackOptions.ForwarderBindInterface = true
+		}
+	}
+	l.tunIf = tunIf
+	l.tunStack, err = tun.NewStack(strings.ToLower(options.Stack.String()), stackOptions)
 	if err != nil {
 		return
 	}
+
 	err = l.tunStack.Start()
 	if err != nil {
 		return
 	}
-	log.Infoln("Tun adapter listening at: %s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
+
+	//l.openAndroidHotspot(tunOptions)
+
+	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.Stack)
 	return
 }
@@ -218,9 +273,9 @@ func (l *Listener) FlushDefaultInterface() {
 		for _, destination := range []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified(), netip.MustParseAddr("1.1.1.1")} {
 			autoDetectInterfaceName := l.defaultInterfaceMonitor.DefaultInterfaceName(destination)
 			if autoDetectInterfaceName == l.tunName {
-				log.Warnln("Auto detect interface by %s get same name with tun", destination.String())
+				log.Warnln("[TUN] Auto detect interface by %s get same name with tun", destination.String())
 			} else if autoDetectInterfaceName == "" || autoDetectInterfaceName == "<nil>" {
-				log.Warnln("Auto detect interface by %s get empty name.", destination.String())
+				log.Warnln("[TUN] Auto detect interface by %s get empty name.", destination.String())
 			} else {
 				targetInterface = autoDetectInterfaceName
 				if old := dialer.DefaultInterface.Load(); old != targetInterface {
@@ -268,9 +323,9 @@ func parseRange(uidRanges []ranges.Range[uint32], rangeList []string) ([]ranges.
 	return uidRanges, nil
 }
 
-func (l *Listener) Close() {
+func (l *Listener) Close() error {
 	l.closed = true
-	_ = common.Close(
+	return common.Close(
 		l.tunStack,
 		l.tunIf,
 		l.defaultInterfaceMonitor,
@@ -279,6 +334,10 @@ func (l *Listener) Close() {
 	)
 }
 
-func (l *Listener) Config() config.Tun {
+func (l *Listener) Config() LC.Tun {
 	return l.options
+}
+
+func (l *Listener) Address() string {
+	return l.addrStr
 }

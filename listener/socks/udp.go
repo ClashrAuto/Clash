@@ -3,12 +3,12 @@ package socks
 import (
 	"net"
 
-	"github.com/ClashrAuto/clash/adapter/inbound"
-	"github.com/ClashrAuto/clash/common/pool"
-	"github.com/ClashrAuto/clash/common/sockopt"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/log"
-	"github.com/ClashrAuto/clash/transport/socks5"
+	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/sockopt"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 type UDPListener struct {
@@ -33,7 +33,13 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*UDPListener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-SOCKS"),
+			inbound.WithSpecialRules(""),
+		}
+	}
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -47,39 +53,43 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 		packetConn: l,
 		addr:       addr,
 	}
+	conn := N.NewEnhancePacketConn(l)
 	go func() {
 		for {
-			buf := pool.Get(pool.UDPBufferSize)
-			n, remoteAddr, err := l.ReadFrom(buf)
+			data, put, remoteAddr, err := conn.WaitReadFrom()
 			if err != nil {
-				pool.Put(buf)
+				if put != nil {
+					put()
+				}
 				if sl.closed {
 					break
 				}
 				continue
 			}
-			handleSocksUDP(l, in, buf[:n], remoteAddr)
+			handleSocksUDP(l, in, data, put, remoteAddr, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, addr net.Addr) {
+func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
 	target, payload, err := socks5.DecodeUDPPacket(buf)
 	if err != nil {
 		// Unresolved UDP packet, return buffer to the pool
-		pool.Put(buf)
+		if put != nil {
+			put()
+		}
 		return
 	}
 	packet := &packet{
 		pc:      pc,
 		rAddr:   addr,
 		payload: payload,
-		bufRef:  buf,
+		put:     put,
 	}
 	select {
-	case in <- inbound.NewPacket(target, packet, C.SOCKS5):
+	case in <- inbound.NewPacket(target, packet, C.SOCKS5, additions...):
 	default:
 	}
 }

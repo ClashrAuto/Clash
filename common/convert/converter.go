@@ -2,11 +2,14 @@ package convert
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Dreamacro/clash/log"
 )
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to clash proxies config
@@ -81,7 +84,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			trojan["port"] = urlTrojan.Port()
 			trojan["password"] = urlTrojan.User.Username()
 			trojan["udp"] = true
-			trojan["skip-cert-verify"] = false
+			trojan["skip-cert-verify"], _ = strconv.ParseBool(query.Get("allowInsecure"))
 
 			sni := query.Get("sni")
 			if sni != "" {
@@ -111,6 +114,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				trojan["grpc-opts"] = grpcOpts
 			}
 
+			if fingerprint := query.Get("fp"); fingerprint == "" {
+				trojan["client-fingerprint"] = "chrome"
+			} else {
+				trojan["client-fingerprint"] = fingerprint
+			}
+
 			proxies = append(proxies, trojan)
 
 		case "vless":
@@ -120,7 +129,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			query := urlVLess.Query()
 			vless := make(map[string]any, 20)
-			handleVShareLink(names, urlVLess, scheme, vless)
+			err = handleVShareLink(names, urlVLess, scheme, vless)
+			if err != nil {
+				log.Warnln("error:%s line:%s", err.Error(), line)
+				continue
+			}
 			if flow := query.Get("flow"); flow != "" {
 				vless["flow"] = strings.ToLower(flow)
 			}
@@ -138,19 +151,15 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 				query := urlVMess.Query()
 				vmess := make(map[string]any, 20)
-				handleVShareLink(names, urlVMess, scheme, vmess)
+				err = handleVShareLink(names, urlVMess, scheme, vmess)
+				if err != nil {
+					log.Warnln("error:%s line:%s", err.Error(), line)
+					continue
+				}
 				vmess["alterId"] = 0
 				vmess["cipher"] = "auto"
 				if encryption := query.Get("encryption"); encryption != "" {
 					vmess["cipher"] = encryption
-				}
-				if packetEncoding := query.Get("packetEncoding"); packetEncoding != "" {
-					switch packetEncoding {
-					case "packet":
-						vmess["packet-addr"] = true
-					case "xudp":
-						vmess["xudp"] = true
-					}
 				}
 				proxies = append(proxies, vmess)
 				continue
@@ -162,8 +171,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if jsonDc.Decode(&values) != nil {
 				continue
 			}
-
-			name := uniqueName(names, values["ps"].(string))
+			tempName, ok := values["ps"].(string)
+			if !ok {
+				continue
+			}
+			name := uniqueName(names, tempName)
 			vmess := make(map[string]any, 20)
 
 			vmess["name"] = name
@@ -177,6 +189,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["alterId"] = 0
 			}
 			vmess["udp"] = true
+			vmess["xudp"] = true
 			vmess["tls"] = false
 			vmess["skip-cert-verify"] = false
 
@@ -189,7 +202,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["servername"] = sni
 			}
 
-			network := strings.ToLower(values["net"].(string))
+			network, _ := values["net"].(string)
+			network = strings.ToLower(network)
 			if values["type"] == "http" {
 				network = "http"
 			} else if network == "http" {
@@ -197,9 +211,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			vmess["network"] = network
 
-			tls := strings.ToLower(values["tls"].(string))
-			if strings.HasSuffix(tls, "tls") {
-				vmess["tls"] = true
+			tls, ok := values["tls"].(string)
+			if ok {
+				tls = strings.ToLower(tls)
+				if strings.HasSuffix(tls, "tls") {
+					vmess["tls"] = true
+				}
 			}
 
 			switch network {
@@ -272,22 +289,28 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			var (
-				cipher   = urlSS.User.Username()
-				password string
+				cipherRaw = urlSS.User.Username()
+				cipher    string
+				password  string
 			)
-
+			cipher = cipherRaw
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, _ := enc.DecodeString(cipher)
-				if !strings.Contains(string(dcBuf), "2022-blake3") {
-					dcBuf, _ = encRaw.DecodeString(cipher)
+				dcBuf, err := base64.RawURLEncoding.DecodeString(cipherRaw)
+				if err != nil {
+					dcBuf, _ = enc.DecodeString(cipherRaw)
 				}
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
 				}
+				err = VerifyMethod(cipher, password)
+				if err != nil {
+					dcBuf, _ = encRaw.DecodeString(cipherRaw)
+					cipher, password, found = strings.Cut(string(dcBuf), ":")
+				}
 			}
 
-			ss := make(map[string]any, 20)
+			ss := make(map[string]any, 10)
 
 			ss["name"] = name
 			ss["type"] = scheme
@@ -297,6 +320,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			ss["password"] = password
 			query := urlSS.Query()
 			ss["udp"] = true
+			if query.Get("udp-over-tcp") == "true" || query.Get("uot") == "1" {
+				ss["udp-over-tcp"] = true
+			}
 			if strings.Contains(query.Get("plugin"), "obfs") {
 				obfsParams := strings.Split(query.Get("plugin"), ";")
 				ss["plugin"] = "obfs"
