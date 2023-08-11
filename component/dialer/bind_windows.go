@@ -1,9 +1,13 @@
+//go:build windows
+
 package dialer
 
 import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/ClashrAuto/clash/component/iface"
+	"net"
 	"net/netip"
 	"syscall"
 	"unsafe"
@@ -73,26 +77,26 @@ func bindControl(ifaceIdx int) controlFn {
 	}
 }
 
-//func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ netip.Addr) error {
-//	ifaceObj, err := iface.ResolveInterface(ifaceName)
-//	if err != nil {
-//		return err
-//	}
-//
-//	addControlToDialer(dialer, bindControl(ifaceObj.Index))
-//	return nil
-//}
+func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ netip.Addr) error {
+	ifaceObj, err := iface.ResolveInterface(ifaceName)
+	if err != nil {
+		return err
+	}
 
-//func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address string) (string, error) {
-//	ifaceObj, err := iface.ResolveInterface(ifaceName)
-//	if err != nil {
-//		return "", err
-//	}
-//
-//	addControlToListenConfig(lc, bindControl(ifaceObj.Index))
-//	return address, nil
-//}
+	addControlToDialer(dialer, bindControl(ifaceObj.Index))
+	return nil
+}
 
-//func ParseNetwork(network string, addr netip.Addr) string {
-//	return network
-//}
+func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address string) (string, error) {
+	ifaceObj, err := iface.ResolveInterface(ifaceName)
+	if err != nil {
+		return "", err
+	}
+
+	addControlToListenConfig(lc, bindControl(ifaceObj.Index))
+	return address, nil
+}
+
+func ParseNetwork(network string, addr netip.Addr) string {
+	return network
+}

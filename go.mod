@@ -1,4 +1,4 @@
-module github.com/Dreamacro/clash
+module github.com/ClashrAuto/clash
 
 go 1.19
 
@@ -42,7 +42,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.23.5
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stretchr/testify v1.8.3
-	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54
+	github.com/vishvananda/netlink v1.2.1-beta.2.0.20230420174744-55c8b9515a01
 	github.com/xtls/go v0.0.0-20230107031059-4610f88d00f3
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.etcd.io/bbolt v1.3.7
@@ -112,3 +112,5 @@ require (
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b
+
+replace github.com/Dreamacro/clash => github.com/ClashrAuto/clash v1.6.6-0.20230811170034-0e672da68d4b

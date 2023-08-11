@@ -3,7 +3,7 @@ module clash-test
 go 1.19
 
 require (
-	github.com/Dreamacro/clash v0.0.0
+	github.com/Dreamacro/clash v1.16.0
 	github.com/docker/docker v20.10.21+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/miekg/dns v1.1.55
