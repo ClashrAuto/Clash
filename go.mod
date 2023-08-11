@@ -1,10 +1,9 @@
-module github.com/ClashrAuto/clash
+module github.com/Dreamacro/clash
 
 go 1.19
 
 require (
 	github.com/3andne/restls-client-go v0.1.4
-	github.com/Dreamacro/clash v0.0.0-00010101000000-000000000000
 	github.com/VividCortex/ewma v1.2.0
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/cilium/ebpf v0.10.0
@@ -114,4 +113,4 @@ require (
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b
 
-replace github.com/Dreamacro/clash => github.com/ClashrAuto/clash v1.6.6-0.20230811170034-0e672da68d4b
+//replace github.com/Dreamacro/clash => github.com/ClashrAuto/clash v1.6.6-0.20230811170034-0e672da68d4b

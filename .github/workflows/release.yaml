@@ -25,9 +25,7 @@ jobs:
 
       - name: Get dependencies, run test
         run: |
-          go clean -modcache
-          go mod tidy
-#          go test ./...
+          go test ./...
 
       - name: Build
         if: startsWith(github.ref, 'refs/tags/')

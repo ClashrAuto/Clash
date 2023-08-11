@@ -129,9 +129,7 @@ jobs:
       - name: Test
         if: ${{ matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
         run: |
-          go clean -modcache
-          go mod tidy
-#          go test ./...
+          go test ./...
 
       - name: Build WithoutCGO
         if: ${{ matrix.job.type=='WithoutCGO' }}
