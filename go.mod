@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/3andne/restls-client-go v0.1.4
+	github.com/Dreamacro/clash v0.0.0-00010101000000-000000000000
 	github.com/VividCortex/ewma v1.2.0
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/cilium/ebpf v0.10.0

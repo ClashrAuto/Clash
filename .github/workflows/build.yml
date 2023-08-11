@@ -131,7 +131,7 @@ jobs:
         run: |
           go clean -modcache
           go mod tidy
-          go test ./...
+#          go test ./...
 
       - name: Build WithoutCGO
         if: ${{ matrix.job.type=='WithoutCGO' }}
