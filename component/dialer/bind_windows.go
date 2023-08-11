@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/ClashrAuto/clash/component/iface"
+	"github.com/Dreamacro/clash/component/iface"
 	"net"
 	"net/netip"
 	"syscall"
