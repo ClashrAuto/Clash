@@ -134,7 +134,7 @@ jobs:
       - name: Build WithoutCGO
         if: ${{ matrix.job.type=='WithoutCGO' }}
         env:
-          NAME: Clash.Meta
+          NAME: Clash.Auto
           BINDIR: bin
         run: make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
 
