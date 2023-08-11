@@ -94,9 +94,9 @@ func (p *Proxy) DelayHistory() []C.DelayHistory {
 }
 
 // PutHistory implements C.Proxy
-func (p *Proxy) PutHistory(his map[string][]C.DelayHistory) {
+func (p *Proxy) PutHistory(his []C.DelayHistory) {
 	for _, h := range his {
-		p.history.Put(h...)
+		p.history.Put(h)
 	}
 }
 
