@@ -52,6 +52,7 @@ func (hc *HealthCheck) process() {
 
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
 	hc.start()
+	hc.check()
 	for {
 		select {
 		case <-ticker.C:
