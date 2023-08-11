@@ -46,7 +46,7 @@ require (
 	go.etcd.io/bbolt v1.3.7
 	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.10.0
-	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
+	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
 	golang.org/x/net v0.11.0
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.9.0
@@ -102,10 +102,11 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
+	gvisor.dev/gvisor v0.0.0-20230811145410-65bbd235a6c0 // indirect
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b
