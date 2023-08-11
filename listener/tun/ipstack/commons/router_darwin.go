@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/ClashrAuto/clash/common/cmd"
-	"github.com/ClashrAuto/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/common/cmd"
+	"github.com/Dreamacro/clash/listener/tun/device"
 )
 
 func GetAutoDetectInterface() (string, error) {

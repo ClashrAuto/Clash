@@ -1,7 +1,7 @@
 package common
 
 import (
-	C "github.com/ClashrAuto/clash/constant"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 type Match struct {

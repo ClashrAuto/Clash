@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/ClashrAuto/clash/log"
+	"github.com/Dreamacro/clash/log"
 
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/windows/driver/memmod"

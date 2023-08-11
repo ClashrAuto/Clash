@@ -3,7 +3,7 @@ package sing_tun
 import (
 	"time"
 
-	"github.com/ClashrAuto/clash/log"
+	"github.com/Dreamacro/clash/log"
 
 	tun "github.com/metacubex/sing-tun"
 )

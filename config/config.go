@@ -58,6 +58,7 @@ type General struct {
 	Sniffing                bool              `json:"sniffing"`
 	EBpf                    EBpf              `json:"-"`
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
+	SpeedTest               bool              `json:"speed-test"`
 }
 
 // Inbound config
@@ -83,6 +84,7 @@ type Controller struct {
 	ExternalControllerTLS string `json:"-"`
 	ExternalUI            string `json:"-"`
 	Secret                string `json:"-"`
+	SpeedTest             bool   `json:"-"`
 }
 
 // DNS config
@@ -280,6 +282,7 @@ type RawConfig struct {
 	SubRules      map[string][]string       `yaml:"sub-rules"`
 	RawTLS        TLS                       `yaml:"tls"`
 	Listeners     []map[string]any          `yaml:"listeners"`
+	SpeedTest     bool                      `yaml:"speed-test"`
 }
 
 type RawGeoXUrl struct {
@@ -423,6 +426,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			GeoIp:   "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
 			GeoSite: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		},
+		SpeedTest: false,
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {

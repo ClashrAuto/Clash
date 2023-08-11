@@ -1,7 +1,7 @@
 package geodata
 
 import (
-	"github.com/ClashrAuto/clash/component/geodata/router"
+	"github.com/Dreamacro/clash/component/geodata/router"
 )
 
 type LoaderImplementation interface {

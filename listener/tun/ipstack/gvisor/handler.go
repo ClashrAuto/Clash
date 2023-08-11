@@ -8,13 +8,13 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/ClashrAuto/clash/adapter/inbound"
-	"github.com/ClashrAuto/clash/common/nnip"
-	"github.com/ClashrAuto/clash/common/pool"
-	C "github.com/ClashrAuto/clash/constant"
-	D "github.com/ClashrAuto/clash/listener/tun/ipstack/commons"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack/gvisor/adapter"
-	"github.com/ClashrAuto/clash/transport/socks5"
+	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/common/nnip"
+	"github.com/Dreamacro/clash/common/pool"
+	C "github.com/Dreamacro/clash/constant"
+	D "github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 var _ adapter.Handler = (*gvHandler)(nil)

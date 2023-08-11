@@ -9,7 +9,7 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/ClashrAuto/clash/component/auth"
+	"github.com/Dreamacro/clash/component/auth"
 )
 
 // Error represents a SOCKS error

@@ -3,7 +3,7 @@ package common
 import (
 	"strings"
 
-	C "github.com/ClashrAuto/clash/constant"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 type Process struct {

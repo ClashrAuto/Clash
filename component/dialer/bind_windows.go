@@ -4,12 +4,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"net"
 	"net/netip"
 	"syscall"
 	"unsafe"
-
-	"github.com/Dreamacro/clash/component/iface"
 )
 
 const (
@@ -76,26 +73,26 @@ func bindControl(ifaceIdx int) controlFn {
 	}
 }
 
-func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ netip.Addr) error {
-	ifaceObj, err := iface.ResolveInterface(ifaceName)
-	if err != nil {
-		return err
-	}
+//func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ netip.Addr) error {
+//	ifaceObj, err := iface.ResolveInterface(ifaceName)
+//	if err != nil {
+//		return err
+//	}
+//
+//	addControlToDialer(dialer, bindControl(ifaceObj.Index))
+//	return nil
+//}
 
-	addControlToDialer(dialer, bindControl(ifaceObj.Index))
-	return nil
-}
+//func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address string) (string, error) {
+//	ifaceObj, err := iface.ResolveInterface(ifaceName)
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	addControlToListenConfig(lc, bindControl(ifaceObj.Index))
+//	return address, nil
+//}
 
-func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address string) (string, error) {
-	ifaceObj, err := iface.ResolveInterface(ifaceName)
-	if err != nil {
-		return "", err
-	}
-
-	addControlToListenConfig(lc, bindControl(ifaceObj.Index))
-	return address, nil
-}
-
-func ParseNetwork(network string, addr netip.Addr) string {
-	return network
-}
+//func ParseNetwork(network string, addr netip.Addr) string {
+//	return network
+//}

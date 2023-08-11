@@ -11,7 +11,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/ClashrAuto/clash/common/pool"
+	"github.com/Dreamacro/clash/common/pool"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/link/channel"

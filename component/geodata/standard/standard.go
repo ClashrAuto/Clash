@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ClashrAuto/clash/component/geodata"
-	"github.com/ClashrAuto/clash/component/geodata/router"
-	C "github.com/ClashrAuto/clash/constant"
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/geodata/router"
+	C "github.com/Dreamacro/clash/constant"
 
 	"google.golang.org/protobuf/proto"
 )

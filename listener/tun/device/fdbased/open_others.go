@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ClashrAuto/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/device"
 )
 
 func open(fd int, mtu uint32) (device.Device, error) {

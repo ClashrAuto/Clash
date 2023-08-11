@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/ClashrAuto/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/device"
 
 	"golang.zx2c4.com/wireguard/tun"
 )

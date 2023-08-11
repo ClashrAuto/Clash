@@ -4,7 +4,7 @@ import (
 	"net"
 	"sync"
 
-	C "github.com/ClashrAuto/clash/constant"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 type Table struct {

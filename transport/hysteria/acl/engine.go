@@ -1,7 +1,7 @@
 package acl
 
 import (
-	"github.com/ClashrAuto/clash/transport/hysteria/utils"
+	"github.com/Dreamacro/clash/transport/hysteria/utils"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/oschwald/geoip2-golang"
 	"net"

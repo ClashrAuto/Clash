@@ -3,9 +3,9 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-
 	"net"
 	"net/http"
 	"net/netip"
@@ -18,6 +18,8 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/VividCortex/ewma"
 )
 
 var UnifiedDelay = atomic.NewBool(false)
@@ -92,9 +94,9 @@ func (p *Proxy) DelayHistory() []C.DelayHistory {
 }
 
 // PutHistory implements C.Proxy
-func (p *Proxy) PutHistory(his []C.DelayHistory) {
+func (p *Proxy) PutHistory(his map[string][]C.DelayHistory) {
 	for _, h := range his {
-		p.history.Put(h)
+		p.history.Put(h...)
 	}
 }
 

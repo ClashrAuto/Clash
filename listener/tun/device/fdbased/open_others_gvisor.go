@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ClashrAuto/clash/listener/tun/device/iobased"
+	"github.com/Dreamacro/clash/listener/tun/device/iobased"
 )
 
 func (f *FD) newEpOther() error {

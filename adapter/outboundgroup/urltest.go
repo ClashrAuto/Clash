@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Dreamacro/clash/log"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -112,10 +113,24 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 	}
 
 	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
+
+		// 检测所有代理是否有下载速度测试
+		var proxyFromSpeed []C.Proxy
+		for _, p := range proxies[1:] {
+
+			if p.LastSpeed() > 0 {
+				proxyFromSpeed = append(proxyFromSpeed, p)
+			}
+		}
+
+		fastd := proxies[0]
+		fasts := proxies[0]
 		fast := proxies[0]
-		// min := fast.LastDelay()
 		min := fast.LastDelayForTestUrl(u.testUrl)
+		max := fasts.LastSpeed()
 		fastNotExist := true
+
+		log.Debugln("has speed test proxy -> %d", len(proxyFromSpeed))
 
 		for _, proxy := range proxies[1:] {
 			if u.fastNode != nil && proxy.Name() == u.fastNode.Name() {

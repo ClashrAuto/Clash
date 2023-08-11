@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/ClashrAuto/clash/common/nnip"
-	"github.com/ClashrAuto/clash/log"
+	"github.com/Dreamacro/clash/common/nnip"
+	"github.com/Dreamacro/clash/log"
 )
 
 // store process name for when dealing with multiple PROCESS-NAME rules

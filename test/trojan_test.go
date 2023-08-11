@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ClashrAuto/clash/adapter/outbound"
-	C "github.com/ClashrAuto/clash/constant"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/require"
 )

@@ -6,11 +6,11 @@ package gvisor
 import (
 	"net/netip"
 
-	"github.com/ClashrAuto/clash/adapter/inbound"
-	C "github.com/ClashrAuto/clash/constant"
-	"github.com/ClashrAuto/clash/listener/tun/device"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack"
-	"github.com/ClashrAuto/clash/listener/tun/ipstack/gvisor/option"
+	"github.com/Dreamacro/clash/adapter/inbound"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/ipstack"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"

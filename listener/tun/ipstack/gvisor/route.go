@@ -3,7 +3,7 @@
 package gvisor
 
 import (
-	"github.com/ClashrAuto/clash/listener/tun/ipstack/gvisor/option"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"

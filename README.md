@@ -30,8 +30,11 @@
 - Comprehensive HTTP RESTful API controller
 
 ## Getting Started
-Documentations are now moved to [GitHub Wiki](https://github.com/ClashrAuto/clash/wiki).
+
+Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
+
 ## Wiki
+
 Configuration examples can be found at [/docs/config.yaml](https://github.com/MetaCubeX/Clash.Meta/blob/Alpha/docs/config.yaml), while documentation can be found [Clash.Meta Wiki](https://clash-meta.wiki).
 
 ## Build
@@ -295,7 +298,7 @@ iptables:
 
 - Create user given name `clash-auto`
 
-- Download and decompress pre-built binaries from [releases](https://github.com/ClashrAuto/clash/releases)
+- Download and decompress pre-built binaries from [releases](https://github.com/Dreamacro/clash/releases)
 
 - Rename executable file to `Clash-Auto` and move to `/usr/local/bin/`
 
@@ -351,11 +354,11 @@ We also made a custom fork of yacd provide better support for this project, chec
 ## Development
 
 If you want to build an application that uses clash as a library, check out the
-the [GitHub Wiki](https://github.com/ClashrAuto/clash/wiki/use-clash-as-a-library)
+the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
 ## Debugging
-Check [wiki](https://github.com/MetaCubeX/Clash.Meta/wiki/How-to-use-debug-api) to get an instruction on using debug API.
 
+Check [wiki](https://github.com/MetaCubeX/Clash.Meta/wiki/How-to-use-debug-api) to get an instruction on using debug API.
 
 ## Credits
 

@@ -1,7 +1,7 @@
 package faketcp
 
 import (
-	"github.com/ClashrAuto/clash/transport/hysteria/obfs"
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"net"
 	"sync"
 	"syscall"

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ClashrAuto/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/device"
 
 	"golang.org/x/sys/unix"
 )

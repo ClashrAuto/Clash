@@ -3,7 +3,7 @@ package fdbased
 import (
 	"errors"
 
-	"github.com/ClashrAuto/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/device"
 )
 
 func Open(name string, mtu uint32) (device.Device, error) {

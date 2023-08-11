@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/ClashrAuto/clash/component/resolver"
+	"github.com/Dreamacro/clash/component/resolver"
 	D "github.com/miekg/dns"
 )
 

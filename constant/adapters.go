@@ -159,7 +159,7 @@ type Proxy interface {
 	ProxyAdapter
 	Alive() bool
 	AliveForTestUrl(url string) bool
-	PutHistory([]DelayHistory)
+	PutHistory(map[string][]DelayHistory)
 	ExtraDelayHistory() map[string][]DelayHistory
 	LastDelay() uint16
 	LastSpeed() float64

@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/ClashrAuto/clash/adapter/outboundgroup"
-	"github.com/ClashrAuto/clash/common/structure"
+	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/adapter/outboundgroup"
 )
 
 func trimArr(arr []string) (r []string) {
