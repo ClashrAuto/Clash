@@ -58,7 +58,6 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
-	gvisor.dev/gvisor v0.0.0-20230727231608-3924579214c2
 	lukechampine.com/blake3 v1.2.1
 )
 
@@ -110,7 +109,6 @@ require (
 	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b
