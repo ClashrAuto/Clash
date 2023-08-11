@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/3andne/restls-client-go v0.1.4
+	github.com/VividCortex/ewma v1.2.0
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/cilium/ebpf v0.10.0
 	github.com/coreos/go-iptables v0.6.0
@@ -52,6 +53,7 @@ require (
 	golang.org/x/net v0.11.0
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.9.0
+	golang.org/x/time v0.3.0
 	golang.zx2c4.com/wireguard v0.0.0-20230704135630-469159ecf7d1
 	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/protobuf v1.30.0
@@ -62,7 +64,6 @@ require (
 
 require (
 	github.com/RyuaNerin/go-krypto v1.0.2 // indirect
-	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
@@ -108,8 +109,8 @@ require (
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/text v0.10.0 // indirect
-	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b

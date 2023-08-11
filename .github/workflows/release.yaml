@@ -25,6 +25,8 @@ jobs:
 
       - name: Get dependencies, run test
         run: |
+          go clean -modcache
+          go mod tidy
           go test ./...
 
       - name: Build
