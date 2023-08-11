@@ -106,7 +106,7 @@ require (
 	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	gvisor.dev/gvisor v0.0.0-20230811145410-65bbd235a6c0 // indirect
+	gvisor.dev/gvisor v0.0.0-20230727231608-3924579214c2 // indirect
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b
