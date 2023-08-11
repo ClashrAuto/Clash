@@ -41,17 +41,22 @@ require (
 	github.com/shirou/gopsutil/v3 v3.23.5
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stretchr/testify v1.8.3
+	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54
 	github.com/xtls/go v0.0.0-20230107031059-4610f88d00f3
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.etcd.io/bbolt v1.3.7
+	go.uber.org/atomic v1.11.0
 	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.10.0
 	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
 	golang.org/x/net v0.11.0
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.9.0
+	golang.zx2c4.com/wireguard v0.0.0-20230704135630-469159ecf7d1
+	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
+	gvisor.dev/gvisor v0.0.0-20230727231608-3924579214c2
 	lukechampine.com/blake3 v1.2.1
 )
 
@@ -101,12 +106,11 @@ require (
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
-	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	gvisor.dev/gvisor v0.0.0-20230727231608-3924579214c2 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b
