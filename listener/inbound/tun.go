@@ -4,10 +4,10 @@ import (
 	"errors"
 	"strings"
 
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing_tun"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing_tun"
+	"github.com/metacubex/mihomo/log"
 )
 
 type TunOption struct {
@@ -19,11 +19,22 @@ type TunOption struct {
 	AutoDetectInterface bool     `inbound:"auto-detect-interface,omitempty"`
 
 	MTU                    uint32   `inbound:"mtu,omitempty"`
+	GSO                    bool     `inbound:"gso,omitempty"`
+	GSOMaxSize             uint32   `inbound:"gso-max-size,omitempty"`
 	Inet4Address           []string `inbound:"inet4_address,omitempty"`
 	Inet6Address           []string `inbound:"inet6_address,omitempty"`
+	IPRoute2TableIndex     int      `inbound:"iproute2-table-index"`
+	IPRoute2RuleIndex      int      `inbound:"iproute2-rule-index"`
+	AutoRedirect           bool     `inbound:"auto-redirect"`
+	AutoRedirectInputMark  uint32   `inbound:"auto-redirect-input-mark"`
+	AutoRedirectOutputMark uint32   `inbound:"auto-redirect-output-mark"`
 	StrictRoute            bool     `inbound:"strict_route,omitempty"`
-	Inet4RouteAddress      []string `inbound:"inet4_route_address,omitempty"`
-	Inet6RouteAddress      []string `inbound:"inet6_route_address,omitempty"`
+	RouteAddress           []string `inbound:"route-address"`
+	RouteAddressSet        []string `inbound:"route-address-set"`
+	RouteExcludeAddress    []string `inbound:"route-exclude-address"`
+	RouteExcludeAddressSet []string `inbound:"route-exclude-address-set"`
+	IncludeInterface       []string `inbound:"include-interface,omitempty"`
+	ExcludeInterface       []string `inbound:"exclude-interface"`
 	IncludeUID             []uint32 `inbound:"include_uid,omitempty"`
 	IncludeUIDRange        []string `inbound:"include_uid_range,omitempty"`
 	ExcludeUID             []uint32 `inbound:"exclude_uid,omitempty"`
@@ -34,6 +45,11 @@ type TunOption struct {
 	EndpointIndependentNat bool     `inbound:"endpoint_independent_nat,omitempty"`
 	UDPTimeout             int64    `inbound:"udp_timeout,omitempty"`
 	FileDescriptor         int      `inbound:"file-descriptor,omitempty"`
+
+	Inet4RouteAddress        []string `inbound:"inet4_route_address,omitempty"`
+	Inet6RouteAddress        []string `inbound:"inet6_route_address,omitempty"`
+	Inet4RouteExcludeAddress []string `inbound:"inet4_route_exclude_address,omitempty"`
+	Inet6RouteExcludeAddress []string `inbound:"inet6_route_exclude_address,omitempty"`
 }
 
 func (o TunOption) Equal(config C.InboundConfig) bool {
@@ -56,19 +72,37 @@ func NewTun(options *TunOption) (*Tun, error) {
 	if !exist {
 		return nil, errors.New("invalid tun stack")
 	}
-	inet4Address, err := LC.StringSliceToListenPrefixSlice(options.Inet4Address)
+
+	routeAddress, err := LC.StringSliceToNetipPrefixSlice(options.RouteAddress)
 	if err != nil {
 		return nil, err
 	}
-	inet6Address, err := LC.StringSliceToListenPrefixSlice(options.Inet6Address)
+	routeExcludeAddress, err := LC.StringSliceToNetipPrefixSlice(options.RouteExcludeAddress)
 	if err != nil {
 		return nil, err
 	}
-	inet4RouteAddress, err := LC.StringSliceToListenPrefixSlice(options.Inet4RouteAddress)
+
+	inet4Address, err := LC.StringSliceToNetipPrefixSlice(options.Inet4Address)
 	if err != nil {
 		return nil, err
 	}
-	inet6RouteAddress, err := LC.StringSliceToListenPrefixSlice(options.Inet6RouteAddress)
+	inet6Address, err := LC.StringSliceToNetipPrefixSlice(options.Inet6Address)
+	if err != nil {
+		return nil, err
+	}
+	inet4RouteAddress, err := LC.StringSliceToNetipPrefixSlice(options.Inet4RouteAddress)
+	if err != nil {
+		return nil, err
+	}
+	inet6RouteAddress, err := LC.StringSliceToNetipPrefixSlice(options.Inet6RouteAddress)
+	if err != nil {
+		return nil, err
+	}
+	inet4RouteExcludeAddress, err := LC.StringSliceToNetipPrefixSlice(options.Inet4RouteExcludeAddress)
+	if err != nil {
+		return nil, err
+	}
+	inet6RouteExcludeAddress, err := LC.StringSliceToNetipPrefixSlice(options.Inet6RouteExcludeAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +117,22 @@ func NewTun(options *TunOption) (*Tun, error) {
 			AutoRoute:              options.AutoRoute,
 			AutoDetectInterface:    options.AutoDetectInterface,
 			MTU:                    options.MTU,
+			GSO:                    options.GSO,
+			GSOMaxSize:             options.GSOMaxSize,
 			Inet4Address:           inet4Address,
 			Inet6Address:           inet6Address,
+			IPRoute2TableIndex:     options.IPRoute2TableIndex,
+			IPRoute2RuleIndex:      options.IPRoute2RuleIndex,
+			AutoRedirect:           options.AutoRedirect,
+			AutoRedirectInputMark:  options.AutoRedirectInputMark,
+			AutoRedirectOutputMark: options.AutoRedirectOutputMark,
 			StrictRoute:            options.StrictRoute,
-			Inet4RouteAddress:      inet4RouteAddress,
-			Inet6RouteAddress:      inet6RouteAddress,
+			RouteAddress:           routeAddress,
+			RouteAddressSet:        options.RouteAddressSet,
+			RouteExcludeAddress:    routeExcludeAddress,
+			RouteExcludeAddressSet: options.RouteExcludeAddressSet,
+			IncludeInterface:       options.IncludeInterface,
+			ExcludeInterface:       options.ExcludeInterface,
 			IncludeUID:             options.IncludeUID,
 			IncludeUIDRange:        options.IncludeUIDRange,
 			ExcludeUID:             options.ExcludeUID,
@@ -98,6 +143,11 @@ func NewTun(options *TunOption) (*Tun, error) {
 			EndpointIndependentNat: options.EndpointIndependentNat,
 			UDPTimeout:             options.UDPTimeout,
 			FileDescriptor:         options.FileDescriptor,
+
+			Inet4RouteAddress:        inet4RouteAddress,
+			Inet6RouteAddress:        inet6RouteAddress,
+			Inet4RouteExcludeAddress: inet4RouteExcludeAddress,
+			Inet6RouteExcludeAddress: inet6RouteExcludeAddress,
 		},
 	}, nil
 }
@@ -113,9 +163,9 @@ func (t *Tun) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Tun) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *Tun) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.l, err = sing_tun.New(t.tun, tcpIn, udpIn, t.Additions()...)
+	t.l, err = sing_tun.New(t.tun, tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"net"
 
-	"github.com/Dreamacro/clash/common/atomic"
-	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/component/resolver"
 )
 
 var (
@@ -20,11 +20,13 @@ type NetDialer interface {
 
 type option struct {
 	interfaceName string
+	fallbackBind  bool
 	addrReuse     bool
 	routingMark   int
 	network       int
 	prefer        int
 	tfo           bool
+	mpTcp         bool
 	resolver      resolver.Resolver
 	netDialer     NetDialer
 }
@@ -34,6 +36,12 @@ type Option func(opt *option)
 func WithInterface(name string) Option {
 	return func(opt *option) {
 		opt.interfaceName = name
+	}
+}
+
+func WithFallbackBind(fallback bool) Option {
+	return func(opt *option) {
+		opt.fallbackBind = fallback
 	}
 }
 
@@ -80,6 +88,12 @@ func WithOnlySingleStack(isIPv4 bool) Option {
 func WithTFO(tfo bool) Option {
 	return func(opt *option) {
 		opt.tfo = tfo
+	}
+}
+
+func WithMPTCP(mpTcp bool) Option {
+	return func(opt *option) {
+		opt.mpTcp = mpTcp
 	}
 }
 

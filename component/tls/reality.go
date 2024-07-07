@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -15,18 +16,15 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
-	"unsafe"
 
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/ntp"
 
-	utls "github.com/sagernet/utls"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
+	utls "github.com/metacubex/utls"
 	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/net/http2"
 )
@@ -34,15 +32,13 @@ import (
 const RealityMaxShortIDLen = 8
 
 type RealityConfig struct {
-	PublicKey [curve25519.ScalarSize]byte
+	PublicKey *ecdh.PublicKey
 	ShortID   [RealityMaxShortIDLen]byte
 }
 
-//go:linkname aesgcmPreferred crypto/tls.aesgcmPreferred
-func aesgcmPreferred(ciphers []uint16) bool
-
 func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config, realityConfig *RealityConfig) (net.Conn, error) {
-	if fingerprint, exists := GetFingerprint(ClientFingerprint); exists {
+	retry := 0
+	for fingerprint, exists := GetFingerprint(ClientFingerprint); exists; retry++ {
 		verifier := &realityVerifier{
 			serverName: tlsConfig.ServerName,
 		}
@@ -70,7 +66,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 			rawSessionID[i] = 0
 		}
 
-		binary.BigEndian.PutUint64(hello.SessionId, uint64(time.Now().Unix()))
+		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
 
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
 		hello.SessionId[0] = 1
@@ -79,7 +75,18 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
-		authKey := uConn.HandshakeState.State13.EcdheParams.SharedKey(realityConfig.PublicKey[:])
+		ecdheKey := uConn.HandshakeState.State13.EcdheKey
+		if ecdheKey == nil {
+			// WTF???
+			if retry > 2 {
+				return nil, errors.New("nil ecdheKey")
+			}
+			continue // retry
+		}
+		authKey, err := ecdheKey.ECDH(realityConfig.PublicKey)
+		if err != nil {
+			return nil, err
+		}
 		if authKey == nil {
 			return nil, errors.New("nil auth_key")
 		}
@@ -89,7 +96,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 			return nil, err
 		}
 		var aeadCipher cipher.AEAD
-		if aesgcmPreferred(hello.CipherSuites) {
+		if utls.AesgcmPreferred(hello.CipherSuites) {
 			aesBlock, _ := aes.NewCipher(authKey)
 			aeadCipher, _ = cipher.NewGCM(aesBlock)
 		} else {
@@ -126,15 +133,18 @@ func realityClientFallback(uConn net.Conn, serverName string, fingerprint utls.C
 			},
 		},
 	}
-	request, _ := http.NewRequest("GET", "https://"+serverName, nil)
+	request, err := http.NewRequest("GET", "https://"+serverName, nil)
+	if err != nil {
+		return
+	}
 	request.Header.Set("User-Agent", fingerprint.Client)
-	request.AddCookie(&http.Cookie{Name: "padding", Value: strings.Repeat("0", fastrand.Intn(32)+30)})
+	request.AddCookie(&http.Cookie{Name: "padding", Value: strings.Repeat("0", randv2.IntN(32)+30)})
 	response, err := client.Do(request)
 	if err != nil {
 		return
 	}
 	//_, _ = io.Copy(io.Discard, response.Body)
-	time.Sleep(time.Duration(5+fastrand.Int63n(10)) * time.Second)
+	time.Sleep(time.Duration(5+randv2.IntN(10)) * time.Second)
 	response.Body.Close()
 	client.CloseIdleConnections()
 }
@@ -146,11 +156,12 @@ type realityVerifier struct {
 	verified   bool
 }
 
-var pOffset = utils.MustOK(reflect.TypeOf((*utls.Conn)(nil)).Elem().FieldByName("peerCertificates")).Offset
+//var pOffset = utils.MustOK(reflect.TypeOf((*utls.Conn)(nil)).Elem().FieldByName("peerCertificates")).Offset
 
 func (c *realityVerifier) VerifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	//p, _ := reflect.TypeOf(c.Conn).Elem().FieldByName("peerCertificates")
-	certs := *(*[]*x509.Certificate)(unsafe.Add(unsafe.Pointer(c.Conn), pOffset))
+	//certs := *(*[]*x509.Certificate)(unsafe.Add(unsafe.Pointer(c.Conn), pOffset))
+	certs := c.Conn.PeerCertificates()
 	if pub, ok := certs[0].PublicKey.(ed25519.PublicKey); ok {
 		h := hmac.New(sha512.New, c.authKey)
 		h.Write(pub)

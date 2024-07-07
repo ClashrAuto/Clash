@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/profile/cachefile"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/tunnel"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -30,7 +30,6 @@ func proxyRouter() http.Handler {
 		r.Use(parseProxyName, findProxyByName)
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
-		r.Get("/speed", getProxySpeed)
 		r.Put("/", updateProxy)
 	})
 	return r
@@ -47,7 +46,7 @@ func parseProxyName(next http.Handler) http.Handler {
 func findProxyByName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.Context().Value(CtxKeyProxyName).(string)
-		proxies := tunnel.Proxies()
+		proxies := tunnel.ProxiesWithProviders()
 		proxy, exist := proxies[name]
 		if !exist {
 			render.Status(r, http.StatusNotFound)
@@ -61,7 +60,7 @@ func findProxyByName(next http.Handler) http.Handler {
 }
 
 func getProxies(w http.ResponseWriter, r *http.Request) {
-	proxies := tunnel.Proxies()
+	proxies := tunnel.ProxiesWithProviders()
 	render.JSON(w, r, render.M{
 		"proxies": proxies,
 	})
@@ -114,7 +113,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expectedStatus, err := utils.NewIntRanges[uint16](query.Get("expected"))
+	expectedStatus, err := utils.NewUnsignedRanges[uint16](query.Get("expected"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
@@ -126,7 +125,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	delay, err := proxy.URLTest(ctx, url, expectedStatus, C.ExtraHistory)
+	delay, err := proxy.URLTest(ctx, url, expectedStatus)
 	if ctx.Err() != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, ErrRequestTimeout)
@@ -145,38 +144,5 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	render.JSON(w, r, render.M{
 		"delay": delay,
-	})
-}
-
-func getProxySpeed(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	url := query.Get("url")
-	// timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 16)
-	// fmt.Println(timeout)
-	// fmt.Println(err)
-	// if err != nil {
-	// 	render.Status(r, http.StatusBadRequest)
-	// 	render.JSON(w, r, ErrBadRequest)
-	// 	return
-	// }
-	timeout, _ := strconv.Atoi(query.Get("timeout"))
-
-	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
-
-	speed, err := proxy.URLDownload(timeout, url)
-	// if ctx.Err() != nil {
-	// 	render.Status(r, http.StatusGatewayTimeout)
-	// 	render.JSON(w, r, err)
-	// 	return
-	// }
-
-	if err != nil {
-		render.Status(r, http.StatusServiceUnavailable)
-		render.JSON(w, r, newError("An error occurred in the speed test"))
-		return
-	}
-
-	render.JSON(w, r, render.M{
-		"speed": speed,
 	})
 }

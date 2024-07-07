@@ -1,4 +1,4 @@
-NAME=Clash.Auto
+NAME=mihomo
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
@@ -12,15 +12,15 @@ VERSION=$(shell git rev-parse --short HEAD)
 endif
 
 BUILDTIME=$(shell date -u)
-GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
-		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
+GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.com/metacubex/mihomo/constant.Version=$(VERSION)" \
+		-X "github.com/metacubex/mihomo/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
 PLATFORM_LIST = \
+	darwin-amd64-compatible \
 	darwin-amd64 \
 	darwin-arm64 \
 	linux-amd64-compatible \
-	linux-386 \
 	linux-amd64 \
 	linux-armv5 \
 	linux-armv6 \
@@ -106,7 +106,7 @@ linux-mips64le:
 
 linux-riscv64:
 	GOARCH=riscv64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
+	
 linux-loong64:
 	GOARCH=loong64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
@@ -155,11 +155,7 @@ vet:
 	go test ./...
 
 lint:
-	GOOS=darwin golangci-lint run ./...
-	GOOS=windows golangci-lint run ./...
-	GOOS=linux golangci-lint run ./...
-	GOOS=freebsd golangci-lint run ./...
-	GOOS=openbsd golangci-lint run ./...
+	golangci-lint run ./...
 
 clean:
 	rm $(BINDIR)/*

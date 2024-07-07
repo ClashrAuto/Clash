@@ -7,14 +7,14 @@ import (
 	"net"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/tuic/common"
-	v4 "github.com/Dreamacro/clash/transport/tuic/v4"
-	v5 "github.com/Dreamacro/clash/transport/tuic/v5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/mihomo/transport/tuic/common"
+	v4 "github.com/metacubex/mihomo/transport/tuic/v4"
+	v5 "github.com/metacubex/mihomo/transport/tuic/v5"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
@@ -114,7 +114,7 @@ func (s *serverHandler) handle() {
 func (s *serverHandler) handleMessage() (err error) {
 	for {
 		var message []byte
-		message, err = s.quicConn.ReceiveMessage()
+		message, err = s.quicConn.ReceiveDatagram(context.Background())
 		if err != nil {
 			return err
 		}
@@ -223,6 +223,10 @@ func NewServer(option *ServerOption, pc net.PacketConn) (*Server, error) {
 		}
 	}
 	if len(option.Users) > 0 {
+		maxUdpRelayPacketSize := option.MaxUdpRelayPacketSize
+		if maxUdpRelayPacketSize > MaxFragSizeV5 {
+			maxUdpRelayPacketSize = MaxFragSizeV5
+		}
 		server.optionV5 = &v5.ServerOption{
 			HandleTcpFn:           option.HandleTcpFn,
 			HandleUdpFn:           option.HandleUdpFn,

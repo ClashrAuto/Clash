@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/sockopt"
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	embedSS "github.com/Dreamacro/clash/listener/shadowsocks"
-	"github.com/Dreamacro/clash/listener/sing"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/sockopt"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	embedSS "github.com/metacubex/mihomo/listener/shadowsocks"
+	"github.com/metacubex/mihomo/listener/sing"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/ntp"
 
 	shadowsocks "github.com/metacubex/sing-shadowsocks"
 	"github.com/metacubex/sing-shadowsocks/shadowaead"
@@ -22,6 +23,7 @@ import (
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/network"
 )
 
 type Listener struct {
@@ -34,7 +36,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (C.MultiAddrListener, error) {
+func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
 	var sl *Listener
 	var err error
 	if len(additions) == 0 {
@@ -49,11 +51,14 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 
 	udpTimeout := int64(sing.UDPTimeout.Seconds())
 
-	h := &sing.ListenerHandler{
-		TcpIn:     tcpIn,
-		UdpIn:     udpIn,
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
+		Tunnel:    tunnel,
 		Type:      C.SHADOWSOCKS,
 		Additions: additions,
+		MuxOption: config.MuxOption,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	sl = &Listener{false, config, nil, nil, nil}
@@ -64,10 +69,10 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 	case common.Contains(shadowaead.List, config.Cipher):
 		sl.service, err = shadowaead.NewService(config.Cipher, nil, config.Password, udpTimeout, h)
 	case common.Contains(shadowaead_2022.List, config.Cipher):
-		sl.service, err = shadowaead_2022.NewServiceWithPassword(config.Cipher, config.Password, udpTimeout, h, time.Now)
+		sl.service, err = shadowaead_2022.NewServiceWithPassword(config.Cipher, config.Password, udpTimeout, h, ntp.Now)
 	default:
 		err = fmt.Errorf("shadowsocks: unsupported method: %s", config.Cipher)
-		return embedSS.New(config, tcpIn, udpIn)
+		return embedSS.New(config, tunnel)
 	}
 	if err != nil {
 		return nil, err
@@ -92,30 +97,33 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 
 			go func() {
 				conn := bufio.NewPacketConn(ul)
-				var buff *buf.Buffer
-				newBuffer := func() *buf.Buffer {
-					buff = buf.NewPacket() // do not use stack buffer
-					return buff
+				rwOptions := network.ReadWaitOptions{
+					FrontHeadroom: network.CalculateFrontHeadroom(sl.service),
+					RearHeadroom:  network.CalculateRearHeadroom(sl.service),
+					MTU:           network.CalculateMTU(conn, sl.service),
 				}
 				readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
 				if isReadWaiter {
-					readWaiter.InitializeReadWaiter(newBuffer)
+					readWaiter.InitializeReadWaiter(rwOptions)
 				}
 				for {
 					var (
+						buff *buf.Buffer
 						dest M.Socksaddr
 						err  error
 					)
 					buff = nil // clear last loop status, avoid repeat release
 					if isReadWaiter {
-						dest, err = readWaiter.WaitReadPacket()
+						buff, dest, err = readWaiter.WaitReadPacket()
 					} else {
-						dest, err = conn.ReadPacket(newBuffer())
+						buff = rwOptions.NewPacketBuffer()
+						dest, err = conn.ReadPacket(buff)
+						if buff != nil {
+							rwOptions.PostReturn(buff)
+						}
 					}
 					if err != nil {
-						if buff != nil {
-							buff.Release()
-						}
+						buff.Release()
 						if sl.closed {
 							break
 						}
@@ -145,9 +153,9 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 					}
 					continue
 				}
-				_ = c.(*net.TCPConn).SetKeepAlive(true)
+				N.TCPKeepAlive(c)
 
-				go sl.HandleConn(c, tcpIn)
+				go sl.HandleConn(c, tunnel)
 			}
 		}()
 	}
@@ -187,7 +195,7 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 	return
 }
 
-func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	ctx := sing.WithAdditions(context.TODO(), additions...)
 	err := l.service.NewConnection(ctx, conn, M.Metadata{
 		Protocol: "shadowsocks",
@@ -199,10 +207,10 @@ func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions 
 	}
 }
 
-func HandleShadowSocks(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) bool {
+func HandleShadowSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) bool {
 	if _listener != nil && _listener.service != nil {
-		go _listener.HandleConn(conn, in, additions...)
+		go _listener.HandleConn(conn, tunnel, additions...)
 		return true
 	}
-	return embedSS.HandleShadowSocks(conn, in, additions...)
+	return embedSS.HandleShadowSocks(conn, tunnel, additions...)
 }

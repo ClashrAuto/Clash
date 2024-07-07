@@ -2,9 +2,19 @@ package v5
 
 import (
 	"bytes"
+	"sync"
+
+	"github.com/metacubex/mihomo/common/lru"
 
 	"github.com/metacubex/quic-go"
 )
+
+// MaxFragSize is a safe udp relay packet size
+// because tuicv5 support udp fragment so we unneeded to do a magic modify for quic-go to increase MaxDatagramFrameSize
+// it may not work fine in some platform
+// "1200" from quic-go's MaxDatagramSize
+// "-3" from quic-go's DatagramFrame.MaxDataLen
+var MaxFragSize = 1200 - PacketOverHead - 3
 
 func fragWriteNative(quicConn quic.Connection, packet Packet, buf *bytes.Buffer, fragSize int) (err error) {
 	fullPayload := packet.DATA
@@ -29,7 +39,7 @@ func fragWriteNative(quicConn quic.Connection, packet Packet, buf *bytes.Buffer,
 			return
 		}
 		data := buf.Bytes()
-		err = quicConn.SendMessage(data)
+		err = quicConn.SendDatagram(data)
 		if err != nil {
 			return
 		}
@@ -39,42 +49,68 @@ func fragWriteNative(quicConn quic.Connection, packet Packet, buf *bytes.Buffer,
 }
 
 type deFragger struct {
-	pkgID uint16
-	frags []*Packet
-	count uint8
+	lru  *lru.LruCache[uint16, *packetBag]
+	once sync.Once
 }
 
-func (d *deFragger) Feed(m Packet) *Packet {
+type packetBag struct {
+	frags []*Packet
+	count uint8
+	mutex sync.Mutex
+}
+
+func newPacketBag() *packetBag {
+	return new(packetBag)
+}
+
+func (d *deFragger) init() {
+	if d.lru == nil {
+		d.lru = lru.New(
+			lru.WithAge[uint16, *packetBag](10),
+			lru.WithUpdateAgeOnGet[uint16, *packetBag](),
+		)
+	}
+}
+
+func (d *deFragger) Feed(m *Packet) *Packet {
 	if m.FRAG_TOTAL <= 1 {
-		return &m
+		return m
 	}
 	if m.FRAG_ID >= m.FRAG_TOTAL {
 		// wtf is this?
 		return nil
 	}
-	if d.count == 0 || m.PKT_ID != d.pkgID {
+	d.once.Do(d.init) // lazy init
+	bag, _ := d.lru.GetOrStore(m.PKT_ID, newPacketBag)
+	bag.mutex.Lock()
+	defer bag.mutex.Unlock()
+	if int(m.FRAG_TOTAL) != len(bag.frags) {
 		// new message, clear previous state
-		d.pkgID = m.PKT_ID
-		d.frags = make([]*Packet, m.FRAG_TOTAL)
-		d.count = 1
-		d.frags[m.FRAG_ID] = &m
-	} else if d.frags[m.FRAG_ID] == nil {
-		d.frags[m.FRAG_ID] = &m
-		d.count++
-		if int(d.count) == len(d.frags) {
-			// all fragments received, assemble
-			var data []byte
-			for _, frag := range d.frags {
-				data = append(data, frag.DATA...)
-			}
-			p := d.frags[0] // recover from first fragment
-			p.SIZE = uint16(len(data))
-			p.DATA = data
-			p.FRAG_ID = 0
-			p.FRAG_TOTAL = 1
-			d.count = 0
-			return p
-		}
+		bag.frags = make([]*Packet, m.FRAG_TOTAL)
+		bag.count = 1
+		bag.frags[m.FRAG_ID] = m
+		return nil
 	}
-	return nil
+	if bag.frags[m.FRAG_ID] != nil {
+		return nil
+	}
+	bag.frags[m.FRAG_ID] = m
+	bag.count++
+	if int(bag.count) != len(bag.frags) {
+		return nil
+	}
+
+	// all fragments received, assemble
+	var data []byte
+	for _, frag := range bag.frags {
+		data = append(data, frag.DATA...)
+	}
+	p := *bag.frags[0] // recover from first fragment
+	p.SIZE = uint16(len(data))
+	p.DATA = data
+	p.FRAG_ID = 0
+	p.FRAG_TOTAL = 1
+	bag.frags = nil
+	d.lru.Delete(m.PKT_ID)
+	return &p
 }

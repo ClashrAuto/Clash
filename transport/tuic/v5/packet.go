@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/tuic/common"
+	"github.com/metacubex/mihomo/common/atomic"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 type quicStreamPacketConn struct {
@@ -96,14 +96,14 @@ func (q *quicStreamPacketConn) SetWriteDeadline(t time.Time) error {
 }
 
 func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	if q.inputConn != nil {
+	if inputConn := q.inputConn; inputConn != nil { // copy inputConn avoid be nil in for loop
 		for {
 			var packet Packet
-			packet, err = ReadPacket(q.inputConn)
+			packet, err = ReadPacket(inputConn)
 			if err != nil {
 				return
 			}
-			if packetPtr := q.deFragger.Feed(packet); packetPtr != nil {
+			if packetPtr := q.deFragger.Feed(&packet); packetPtr != nil {
 				n = copy(p, packet.DATA)
 				addr = packetPtr.ADDR.UDPAddr()
 				return
@@ -116,14 +116,14 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 }
 
 func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
-	if q.inputConn != nil {
+	if inputConn := q.inputConn; inputConn != nil { // copy inputConn avoid be nil in for loop
 		for {
 			var packet Packet
-			packet, err = ReadPacket(q.inputConn)
+			packet, err = ReadPacket(inputConn)
 			if err != nil {
 				return
 			}
-			if packetPtr := q.deFragger.Feed(packet); packetPtr != nil {
+			if packetPtr := q.deFragger.Feed(&packet); packetPtr != nil {
 				data = packetPtr.DATA
 				addr = packetPtr.ADDR.UDPAddr()
 				return
@@ -137,7 +137,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if len(p) > 0xffff { // uint16 max
-		return 0, quic.ErrMessageTooLarge(0xffff)
+		return 0, &quic.DatagramTooLargeError{MaxDatagramPayloadSize: 0xffff}
 	}
 	if q.closed {
 		return 0, net.ErrClosed
@@ -157,7 +157,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	if err != nil {
 		return
 	}
-	pktId := uint16(fastrand.Uint32())
+	pktId := uint16(randv2.Uint32())
 	packet := NewPacket(q.connId, pktId, 1, 0, uint16(len(p)), address, p)
 	switch q.udpRelayMode {
 	case common.QUIC:
@@ -178,20 +178,18 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	default: // native
 		if len(p) > q.maxUdpRelayPacketSize {
 			err = fragWriteNative(q.quicConn, packet, buf, q.maxUdpRelayPacketSize)
+		} else {
+			err = packet.WriteTo(buf)
 			if err != nil {
 				return
 			}
+			data := buf.Bytes()
+			err = q.quicConn.SendDatagram(data)
 		}
-		err = packet.WriteTo(buf)
-		if err != nil {
-			return
-		}
-		data := buf.Bytes()
-		err = q.quicConn.SendMessage(data)
 
-		var tooLarge quic.ErrMessageTooLarge
+		var tooLarge *quic.DatagramTooLargeError
 		if errors.As(err, &tooLarge) {
-			err = fragWriteNative(q.quicConn, packet, buf, int(tooLarge)-PacketOverHead)
+			err = fragWriteNative(q.quicConn, packet, buf, int(tooLarge.MaxDatagramPayloadSize)-PacketOverHead)
 		}
 		if err != nil {
 			return

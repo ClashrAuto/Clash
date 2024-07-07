@@ -7,15 +7,16 @@ import (
 	"net"
 	"sync"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/atomic"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/tuic/common"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/atomic"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 type ServerOption struct {
@@ -32,6 +33,7 @@ func NewServerHandler(option *ServerOption, quicConn quic.EarlyConnection, uuid 
 		quicConn:     quicConn,
 		uuid:         uuid,
 		authCh:       make(chan struct{}),
+		udpInputMap:  xsync.NewMapOf[uint16, *serverUDPInput](),
 	}
 }
 
@@ -45,7 +47,7 @@ type serverHandler struct {
 	authUUID atomic.TypedValue[string]
 	authOnce sync.Once
 
-	udpInputMap sync.Map
+	udpInputMap *xsync.MapOf[uint16, *serverUDPInput]
 }
 
 func (s *serverHandler) AuthOk() bool {
@@ -73,7 +75,7 @@ func (s *serverHandler) HandleMessage(message []byte) (err error) {
 		if err != nil {
 			return
 		}
-		return s.parsePacket(packet, common.NATIVE)
+		return s.parsePacket(&packet, common.NATIVE)
 	case HeartbeatType:
 		var heartbeat Heartbeat
 		heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
@@ -85,7 +87,7 @@ func (s *serverHandler) HandleMessage(message []byte) (err error) {
 	return
 }
 
-func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayMode) (err error) {
+func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode common.UdpRelayMode) (err error) {
 	<-s.authCh
 	if !s.authOk.Load() {
 		return
@@ -94,8 +96,7 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayM
 
 	assocId = packet.ASSOC_ID
 
-	v, _ := s.udpInputMap.LoadOrStore(assocId, &serverUDPInput{})
-	input := v.(*serverUDPInput)
+	input, _ := s.udpInputMap.LoadOrCompute(assocId, func() *serverUDPInput { return &serverUDPInput{} })
 	if input.writeClosed.Load() {
 		return nil
 	}
@@ -179,15 +180,14 @@ func (s *serverHandler) HandleUniStream(reader *bufio.Reader) (err error) {
 		if err != nil {
 			return
 		}
-		return s.parsePacket(packet, common.QUIC)
+		return s.parsePacket(&packet, common.QUIC)
 	case DissociateType:
 		var disassociate Dissociate
 		disassociate, err = ReadDissociateWithHead(commandHead, reader)
 		if err != nil {
 			return
 		}
-		if v, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
-			input := v.(*serverUDPInput)
+		if input, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
 			input.writeClosed.Store(true)
 		}
 	}

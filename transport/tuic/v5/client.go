@@ -12,15 +12,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	atomic2 "github.com/Dreamacro/clash/common/atomic"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/tuic/common"
+	atomic2 "github.com/metacubex/mihomo/common/atomic"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 type ClientOption struct {
@@ -46,7 +47,7 @@ type clientImpl struct {
 	openStreams atomic.Int64
 	closed      atomic.Bool
 
-	udpInputMap sync.Map
+	udpInputMap *xsync.MapOf[uint16, net.Conn]
 
 	// only ready for PoolClient
 	dialerRef   C.Dialer
@@ -195,7 +196,7 @@ func (t *clientImpl) handleMessage(quicConn quic.Connection) (err error) {
 	}()
 	for {
 		var message []byte
-		message, err = quicConn.ReceiveMessage()
+		message, err = quicConn.ReceiveDatagram(context.Background())
 		if err != nil {
 			return err
 		}
@@ -269,11 +270,10 @@ func (t *clientImpl) forceClose(quicConn quic.Connection, err error) {
 	if quicConn != nil {
 		_ = quicConn.CloseWithError(ProtocolError, errStr)
 	}
-	udpInputMap := &t.udpInputMap
-	udpInputMap.Range(func(key, value any) bool {
-		if conn, ok := value.(net.Conn); ok {
-			_ = conn.Close()
-		}
+	udpInputMap := t.udpInputMap
+	udpInputMap.Range(func(key uint16, value net.Conn) bool {
+		conn := value
+		_ = conn.Close()
 		udpInputMap.Delete(key)
 		return true
 	})
@@ -348,10 +348,10 @@ func (t *clientImpl) ListenPacketWithDialer(ctx context.Context, metadata *C.Met
 		return nil, common.TooManyOpenStreams
 	}
 
-	pipe1, pipe2 := net.Pipe()
+	pipe1, pipe2 := N.Pipe()
 	var connId uint16
 	for {
-		connId = uint16(fastrand.Intn(0xFFFF))
+		connId = uint16(randv2.IntN(0xFFFF))
 		_, loaded := t.udpInputMap.LoadOrStore(connId, pipe1)
 		if !loaded {
 			break
@@ -406,6 +406,7 @@ func NewClient(clientOption *ClientOption, udp bool, dialerRef C.Dialer) *Client
 		ClientOption: clientOption,
 		udp:          udp,
 		dialerRef:    dialerRef,
+		udpInputMap:  xsync.NewMapOf[uint16, net.Conn](),
 	}
 	c := &Client{ci}
 	runtime.SetFinalizer(c, closeClient)

@@ -3,11 +3,20 @@ package resolver
 import (
 	"errors"
 	"net/netip"
+	"os"
+	"strconv"
 	"strings"
+	_ "unsafe"
 
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/trie"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/resolver/hosts"
+	"github.com/metacubex/mihomo/component/trie"
+	"github.com/metacubex/randv2"
+)
+
+var (
+	DisableSystemHosts, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_HOSTS"))
+	UseSystemHosts        bool
 )
 
 type Hosts struct {
@@ -22,26 +31,33 @@ func NewHosts(hosts *trie.DomainTrie[HostValue]) Hosts {
 
 // Return the search result and whether to match the parameter `isDomain`
 func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
-	value := h.DomainTrie.Search(domain)
-	if value == nil {
-		return nil, false
-	}
-	hostValue := value.Data()
-	for {
-		if isDomain && hostValue.IsDomain {
-			return &hostValue, true
-		} else {
-			if node := h.DomainTrie.Search(hostValue.Domain); node != nil {
-				hostValue = node.Data()
+	if value := h.DomainTrie.Search(domain); value != nil {
+		hostValue := value.Data()
+		for {
+			if isDomain && hostValue.IsDomain {
+				return &hostValue, true
 			} else {
-				break
+				if node := h.DomainTrie.Search(hostValue.Domain); node != nil {
+					hostValue = node.Data()
+				} else {
+					break
+				}
 			}
 		}
+		if isDomain == hostValue.IsDomain {
+			return &hostValue, true
+		}
+
+		return &hostValue, false
 	}
-	if isDomain == hostValue.IsDomain {
-		return &hostValue, true
+
+	if !isDomain && !DisableSystemHosts && UseSystemHosts {
+		addr, _ := hosts.LookupStaticHost(domain)
+		if hostValue, err := NewHostValue(addr); err == nil {
+			return &hostValue, true
+		}
 	}
-	return &hostValue, false
+	return nil, false
 }
 
 type HostValue struct {
@@ -109,5 +125,5 @@ func (hv HostValue) RandIP() (netip.Addr, error) {
 	if hv.IsDomain {
 		return netip.Addr{}, errors.New("value type is error")
 	}
-	return hv.IPs[fastrand.Intn(len(hv.IPs))], nil
+	return hv.IPs[randv2.IntN(len(hv.IPs))], nil
 }

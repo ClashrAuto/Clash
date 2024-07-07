@@ -2,11 +2,11 @@ package statistic
 
 import (
 	"os"
-	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
+	"github.com/metacubex/mihomo/common/atomic"
 
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
@@ -14,6 +14,7 @@ var DefaultManager *Manager
 
 func init() {
 	DefaultManager = &Manager{
+		connections:   xsync.NewMapOf[string, Tracker](),
 		uploadTemp:    atomic.NewInt64(0),
 		downloadTemp:  atomic.NewInt64(0),
 		uploadBlip:    atomic.NewInt64(0),
@@ -27,13 +28,13 @@ func init() {
 }
 
 type Manager struct {
-	connections   sync.Map
-	uploadTemp    *atomic.Int64
-	downloadTemp  *atomic.Int64
-	uploadBlip    *atomic.Int64
-	downloadBlip  *atomic.Int64
-	uploadTotal   *atomic.Int64
-	downloadTotal *atomic.Int64
+	connections   *xsync.MapOf[string, Tracker]
+	uploadTemp    atomic.Int64
+	downloadTemp  atomic.Int64
+	uploadBlip    atomic.Int64
+	downloadBlip  atomic.Int64
+	uploadTotal   atomic.Int64
+	downloadTotal atomic.Int64
 	process       *process.Process
 	memory        uint64
 }
@@ -48,14 +49,14 @@ func (m *Manager) Leave(c Tracker) {
 
 func (m *Manager) Get(id string) (c Tracker) {
 	if value, ok := m.connections.Load(id); ok {
-		c = value.(Tracker)
+		c = value
 	}
 	return
 }
 
 func (m *Manager) Range(f func(c Tracker) bool) {
-	m.connections.Range(func(key, value any) bool {
-		return f(value.(Tracker))
+	m.connections.Range(func(key string, value Tracker) bool {
+		return f(value)
 	})
 }
 

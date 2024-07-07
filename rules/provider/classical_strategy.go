@@ -2,9 +2,10 @@ package provider
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	"strings"
+
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 type classicalStrategy struct {
@@ -76,7 +77,11 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 	} else if len(item) == 2 {
 		return item[0], item[1], nil
 	} else if len(item) > 2 {
-		return item[0], item[1], item[2:]
+		if item[0] == "NOT" || item[0] == "OR" || item[0] == "AND" || item[0] == "SUB-RULE" || item[0] == "DOMAIN-REGEX" || item[0] == "PROCESS-NAME-REGEX" || item[0] == "PROCESS-PATH-REGEX" {
+			return item[0], strings.Join(item[1:len(item)], ","), nil
+		} else {
+			return item[0], item[1], item[2:]
+		}
 	}
 
 	return "", "", nil
@@ -85,7 +90,7 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
 	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
-		case "MATCH", "SUB-RULE":
+		case "MATCH":
 			return nil, fmt.Errorf("unsupported rule type on rule-set")
 		default:
 			return parse(tp, payload, target, params, nil)

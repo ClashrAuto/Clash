@@ -9,17 +9,19 @@ import (
 	"sync"
 	"time"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/dialer"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/dialer"
 )
 
 // Adapter Type
 const (
 	Direct AdapterType = iota
 	Reject
+	RejectDrop
 	Compatible
 	Pass
+	Dns
 
 	Relay
 	Selector
@@ -37,15 +39,18 @@ const (
 	Vless
 	Trojan
 	Hysteria
+	Hysteria2
 	WireGuard
 	Tuic
+	Ssh
 )
 
 const (
-	DefaultTCPTimeout           = 5 * time.Second
-	DefaultUDPTimeout           = DefaultTCPTimeout
-	DefaultTLSTimeout           = DefaultTCPTimeout
-	DefaultMaxHealthCheckUrlNum = 16
+	DefaultTCPTimeout = dialer.DefaultTCPTimeout
+	DefaultUDPTimeout = dialer.DefaultUDPTimeout
+	DefaultDropTime   = 12 * DefaultTCPTimeout
+	DefaultTLSTimeout = DefaultTCPTimeout
+	DefaultTestURL    = "https://www.gstatic.com/generate_204"
 )
 
 var ErrNotSupport = errors.New("no support")
@@ -136,7 +141,6 @@ type ProxyAdapter interface {
 
 type Group interface {
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (mp map[string]uint16, err error)
-	URLDownload(timeout int, url string) (mp map[string]float64, err error)
 	GetProxies(touch bool) []Proxy
 	Touch()
 }
@@ -155,17 +159,24 @@ const (
 	DropHistory
 )
 
+type ProxyState struct {
+	Alive   bool           `json:"alive"`
+	History []DelayHistory `json:"history"`
+}
+
+type DelayHistoryStoreType int
+
 type Proxy interface {
 	ProxyAdapter
-	Alive() bool
 	AliveForTestUrl(url string) bool
+	DelayHistory() []DelayHistory
 	PutHistory(map[string][]DelayHistory)
-	ExtraDelayHistory() map[string][]DelayHistory
+	ExtraDelayHistories() map[string]ProxyState
 	LastDelay() uint16
 	LastSpeed() float64
 	URLDownload(timeout int, url string) (float64, error)
 	LastDelayForTestUrl(url string) uint16
-	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store DelayHistoryStoreType) (uint16, error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)
@@ -183,10 +194,14 @@ func (at AdapterType) String() string {
 		return "Direct"
 	case Reject:
 		return "Reject"
+	case RejectDrop:
+		return "RejectDrop"
 	case Compatible:
 		return "Compatible"
 	case Pass:
 		return "Pass"
+	case Dns:
+		return "Dns"
 	case Shadowsocks:
 		return "Shadowsocks"
 	case ShadowsocksR:
@@ -205,6 +220,8 @@ func (at AdapterType) String() string {
 		return "Trojan"
 	case Hysteria:
 		return "Hysteria"
+	case Hysteria2:
+		return "Hysteria2"
 	case WireGuard:
 		return "WireGuard"
 	case Tuic:
@@ -222,7 +239,8 @@ func (at AdapterType) String() string {
 		return "URLDownload"
 	case LoadBalance:
 		return "LoadBalance"
-
+	case Ssh:
+		return "Ssh"
 	default:
 		return "Unknown"
 	}
@@ -256,6 +274,23 @@ type PacketAdapter interface {
 	Metadata() *Metadata
 }
 
+type packetAdapter struct {
+	UDPPacket
+	metadata *Metadata
+}
+
+// Metadata returns destination metadata
+func (s *packetAdapter) Metadata() *Metadata {
+	return s.metadata
+}
+
+func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
+	return &packetAdapter{
+		packet,
+		metadata,
+	}
+}
+
 type WriteBack interface {
 	WriteBack(b []byte, addr net.Addr) (n int, err error)
 }
@@ -274,13 +309,17 @@ type NatTable interface {
 
 	Delete(key string)
 
-	GetLocalConn(lAddr, rAddr string) *net.UDPConn
+	DeleteLock(key string)
 
-	AddLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
+	GetForLocalConn(lAddr, rAddr string) *net.UDPConn
 
-	RangeLocalConn(lAddr string, f func(key, value any) bool)
+	AddForLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
 
-	GetOrCreateLockForLocalConn(lAddr, key string) (*sync.Cond, bool)
+	RangeForLocalConn(lAddr string, f func(key string, value *net.UDPConn) bool)
 
-	DeleteLocalConnMap(lAddr, key string)
+	GetOrCreateLockForLocalConn(lAddr string, key string) (*sync.Cond, bool)
+
+	DeleteForLocalConn(lAddr, key string)
+
+	DeleteLockForLocalConn(lAddr, key string)
 }

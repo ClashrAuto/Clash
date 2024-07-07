@@ -24,8 +24,6 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 	proxy["port"] = url.Port()
 	proxy["uuid"] = url.User.Username()
 	proxy["udp"] = true
-	proxy["skip-cert-verify"] = false
-	proxy["tls"] = false
 	tls := strings.ToLower(query.Get("security"))
 	if strings.HasSuffix(tls, "tls") || tls == "reality" {
 		proxy["tls"] = true
@@ -33,6 +31,9 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 			proxy["client-fingerprint"] = "chrome"
 		} else {
 			proxy["client-fingerprint"] = fingerprint
+		}
+		if alpn := query.Get("alpn"); alpn != "" {
+			proxy["alpn"] = strings.Split(alpn, ",")
 		}
 	}
 	if sni := query.Get("sni"); sni != "" {
@@ -99,7 +100,7 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		h2Opts["headers"] = headers
 		proxy["h2-opts"] = h2Opts
 
-	case "ws":
+	case "ws", "httpupgrade":
 		headers := make(map[string]any)
 		wsOpts := make(map[string]any)
 		headers["User-Agent"] = RandUserAgent()
@@ -112,7 +113,13 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 			if err != nil {
 				return fmt.Errorf("bad WebSocket max early data size: %v", err)
 			}
-			wsOpts["max-early-data"] = med
+			switch network {
+			case "ws":
+				wsOpts["max-early-data"] = med
+				wsOpts["early-data-header-name"] = "Sec-WebSocket-Protocol"
+			case "httpupgrade":
+				wsOpts["v2ray-http-upgrade-fast-open"] = true
+			}
 		}
 		if earlyDataHeader := query.Get("eh"); earlyDataHeader != "" {
 			wsOpts["early-data-header-name"] = earlyDataHeader

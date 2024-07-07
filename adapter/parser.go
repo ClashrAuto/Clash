@@ -3,11 +3,11 @@ package adapter
 import (
 	"fmt"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/structure"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/common/structure"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 func ParseProxy(mapping map[string]any) (C.Proxy, error) {
@@ -92,6 +92,13 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewHysteria(*hyOption)
+	case "hysteria2":
+		hyOption := &outbound.Hysteria2Option{}
+		err = decoder.Decode(mapping, hyOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewHysteria2(*hyOption)
 	case "wireguard":
 		wgOption := &outbound.WireGuardOption{}
 		err = decoder.Decode(mapping, wgOption)
@@ -106,6 +113,34 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewTuic(*tuicOption)
+	case "direct":
+		directOption := &outbound.DirectOption{}
+		err = decoder.Decode(mapping, directOption)
+		if err != nil {
+			break
+		}
+		proxy = outbound.NewDirectWithOption(*directOption)
+	case "dns":
+		dnsOptions := &outbound.DnsOption{}
+		err = decoder.Decode(mapping, dnsOptions)
+		if err != nil {
+			break
+		}
+		proxy = outbound.NewDnsWithOption(*dnsOptions)
+	case "reject":
+		rejectOption := &outbound.RejectOption{}
+		err = decoder.Decode(mapping, rejectOption)
+		if err != nil {
+			break
+		}
+		proxy = outbound.NewRejectWithOption(*rejectOption)
+	case "ssh":
+		sshOption := &outbound.SshOption{}
+		err = decoder.Decode(mapping, sshOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewSsh(*sshOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
