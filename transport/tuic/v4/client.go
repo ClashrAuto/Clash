@@ -1,4 +1,4 @@
-package tuic
+package v4
 
 import (
 	"bufio"
@@ -19,9 +19,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/tuic/common"
 
-	"github.com/metacubex/quic-go"
 	"github.com/metacubex/randv2"
-	"github.com/puzpuzpuz/xsync/v3"
 )
 
 type ClientOption struct {

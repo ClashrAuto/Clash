@@ -9,8 +9,6 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/transport/tuic/common"
-
-	"github.com/metacubex/quic-go"
 )
 
 type quicStreamPacketConn struct {
