@@ -360,6 +360,7 @@ type RawConfig struct {
 	Listeners     []map[string]any          `yaml:"listeners"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
+	SpeedTest       bool               `yaml:"SpeedTest"`
 }
 
 type GeoXUrl struct {
@@ -524,7 +525,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			GeoSite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
 		},
 		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
-		SpeedTest: false,
+		SpeedTest:     false,
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
