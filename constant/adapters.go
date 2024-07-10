@@ -151,14 +151,6 @@ type DelayHistory struct {
 	Speed float64   `json:"speed"`
 }
 
-type DelayHistoryStoreType int
-
-const (
-	OriginalHistory DelayHistoryStoreType = iota
-	ExtraHistory
-	DropHistory
-)
-
 type ProxyState struct {
 	Alive   bool           `json:"alive"`
 	History []DelayHistory `json:"history"`
