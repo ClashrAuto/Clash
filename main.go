@@ -47,6 +47,7 @@ func init() {
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of mihomo")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
+	flag.Int64Var(&token, "token", 0, "test configuration and exit")
 	flag.Parse()
 }
 
