@@ -33,7 +33,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var InterfaceName = "Meta"
+var InterfaceName = "Clash Auto"
 var EnforceBindInterface = false
 
 type Listener struct {

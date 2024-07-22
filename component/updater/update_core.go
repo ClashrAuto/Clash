@@ -41,8 +41,8 @@ var (
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
 
-	baseURL       string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
-	versionURL    string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://github.com/ClashrAuto/clash/releases/download/Prerelease-Alpha/clash.auto"
+	versionURL    string = "https://github.com/ClashrAuto/clash/releases/download/Prerelease-Alpha/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -52,8 +52,8 @@ func init() {
 		amd64Compatible = "-compatible"
 	}
 	if !strings.HasPrefix(C.Version, "alpha") {
-		baseURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo"
-		versionURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
+		baseURL = "https://github.com/ClashrAuto/clash/releases/latest/download/clash.auto"
+		versionURL = "https://github.com/ClashrAuto/clash/releases/latest/download/version.txt"
 	}
 }
 
@@ -127,7 +127,7 @@ func UpdateCore(execPath string) (err error) {
 
 // prepare fills all necessary fields in Updater object.
 func prepare(exePath string) (err error) {
-	updateDir = filepath.Join(workDir, "meta-update")
+	updateDir = filepath.Join(workDir, "clash.auto-update")
 	currentExeName = exePath
 	_, pkgNameOnly := filepath.Split(packageURL)
 	if pkgNameOnly == "" {
@@ -136,14 +136,14 @@ func prepare(exePath string) (err error) {
 
 	packageName = filepath.Join(updateDir, pkgNameOnly)
 	//log.Infoln(packageName)
-	backupDir = filepath.Join(workDir, "meta-backup")
+	backupDir = filepath.Join(workDir, "clash.auto-backup")
 
 	if runtime.GOOS == "windows" {
-		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
+		updateExeName = "clash.auto" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
 	} else if runtime.GOOS == "android" && runtime.GOARCH == "arm64" {
-		updateExeName = "mihomo-android-arm64-v8"
+		updateExeName = "clash.auto-android-arm64-v8"
 	} else {
-		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
+		updateExeName = "clash.auto" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
 	}
 
 	log.Infoln("updateExeName: %s ", updateExeName)
