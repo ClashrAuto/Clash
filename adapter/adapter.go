@@ -85,10 +85,10 @@ func (p *Proxy) URLDownload(timeout int, url string) (t float64, err error) {
 		record := C.DelayHistory{Time: time.Now()}
 		if err == nil {
 			record.Speed = t
-			record.Delay = p.history.Last().Delay
+			record.Delay = p.LastDelay()
 		}
 		p.history.Put(record)
-		if p.history.Len() > 10 {
+		if p.history.Len() > defaultHistoriesNum {
 			p.history.Pop()
 		}
 	}()
@@ -316,8 +316,9 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	defer func() {
 		alive := err == nil
 		record := C.DelayHistory{Time: time.Now()}
+		record.Speed = p.LastSpeed()
+
 		if alive {
-			record.Speed = p.history.Last().Speed
 			record.Delay = t
 		}
 
