@@ -197,6 +197,14 @@ func RuleProviders() map[string]provider.RuleProvider {
 // UpdateProxies handle update proxies
 func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provider.ProxyProvider) {
 	configMux.Lock()
+
+	// 将原来的delay的历史记录更新到同名新的节点上
+	for _, v := range newProxies {
+		if value, ok := proxies[v.Name()]; ok {
+			newProxies[v.Name()].PutHistory(value.ExtraDelayHistory())
+		}
+	}
+
 	proxies = newProxies
 	providers = newProviders
 	configMux.Unlock()

@@ -49,6 +49,22 @@ func (p *Proxy) PutHistory(his map[string][]C.DelayHistory) {
 	}
 }
 
+func (p *Proxy) ExtraDelayHistory() map[string][]C.DelayHistory {
+	extra := map[string][]C.DelayHistory{}
+	if p.extra != nil {
+		p.extra.Range(func(key string, option *internalProxyState) bool {
+			histories := []C.DelayHistory{}
+			queueM := option.history.Copy()
+			for _, item := range queueM {
+				histories = append(histories, item)
+			}
+			extra[key] = histories
+			return true
+		})
+	}
+	return extra
+}
+
 // LastDelay return last history record. if proxy is not alive, return the max value of uint16.
 // implements C.Proxy
 func (p *Proxy) LastDelay() (delay uint16) {

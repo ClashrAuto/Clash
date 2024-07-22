@@ -164,6 +164,7 @@ type Proxy interface {
 	AliveForTestUrl(url string) bool
 	DelayHistory() []DelayHistory
 	PutHistory(map[string][]DelayHistory)
+	ExtraDelayHistory() map[string][]DelayHistory
 	ExtraDelayHistories() map[string]ProxyState
 	LastDelay() uint16
 	LastSpeed() float64
