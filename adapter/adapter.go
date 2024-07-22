@@ -317,6 +317,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		alive := err == nil
 		record := C.DelayHistory{Time: time.Now()}
 		if alive {
+			record.Speed = p.history.Last().Speed
 			record.Delay = t
 		}
 
