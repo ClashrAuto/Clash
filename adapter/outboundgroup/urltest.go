@@ -16,6 +16,7 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/log"
 )
 
 type urlTestOption func(*URLTest)
@@ -117,29 +118,76 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 	}
 
 	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
+		// 检测所有代理是否有下载速度测试
+		var proxyFromSpeed []C.Proxy
+		for _, p := range proxies[1:] {
+
+			if p.LastSpeed() > 0 {
+				proxyFromSpeed = append(proxyFromSpeed, p)
+			}
+		}
+
+		fastd := proxies[0]
+		fasts := proxies[0]
 		fast := proxies[0]
-		minDelay := fast.LastDelayForTestUrl(u.testUrl)
+		delayMin := fast.LastDelayForTestUrl(u.testUrl)
+		speedMax := fasts.LastSpeed()
 		fastNotExist := true
+
+		log.Debugln("has speed test proxy -> %d", len(proxyFromSpeed))
 
 		for _, proxy := range proxies[1:] {
 			if u.fastNode != nil && proxy.Name() == u.fastNode.Name() {
 				fastNotExist = false
 			}
 
+			// if !proxy.Alive() {
 			if !proxy.AliveForTestUrl(u.testUrl) {
 				continue
 			}
 
-			delay := proxy.LastDelayForTestUrl(u.testUrl)
-			if delay < minDelay {
-				fast = proxy
-				minDelay = delay
+			if len(proxyFromSpeed) > 0 {
+				speed := proxy.LastSpeed()
+				if speed > speedMax {
+					fasts = proxy
+					speedMax = speed
+				}
+			} else {
+				delay := proxy.LastDelayForTestUrl(u.testUrl)
+				if delay < delayMin {
+					fastd = proxy
+					delayMin = delay
+				}
 			}
 
 		}
 		// tolerance
+		// if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance {
 		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {
 			u.fastNode = fast
+			//if speed > 0 {
+			//	if speed > max {
+			//		fast = proxy
+			//		max = speed
+			//	}
+			//} else {
+			//	if delay < min {
+			//		fast = proxy
+			//		min = delay
+			//	}
+			//}
+		}
+
+		if len(proxyFromSpeed) > 0 {
+			// tolerance
+			if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastSpeed() < fasts.LastSpeed()-float64(u.tolerance) {
+				u.fastNode = fasts
+			}
+		} else {
+			// tolerance
+			if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelay() > fastd.LastDelay()+u.tolerance { // || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance
+				u.fastNode = fastd
+			}
 		}
 		return u.fastNode, nil
 	})
