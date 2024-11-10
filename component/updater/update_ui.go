@@ -2,7 +2,6 @@ package updater
 
 import (
 	"archive/zip"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,29 +11,72 @@ import (
 	"sync"
 
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
-var (
-	ExternalUIURL    string
-	ExternalUIPath   string
-	ExternalUIFolder string
-	ExternalUIName   string
-)
-var (
-	ErrIncompleteConf = errors.New("ExternalUI configure incomplete")
-)
-var xdMutex sync.Mutex
+type UIUpdater struct {
+	externalUIURL  string
+	externalUIPath string
+	autoDownloadUI bool
 
-func UpdateUI() error {
-	xdMutex.Lock()
-	defer xdMutex.Unlock()
+	mutex sync.Mutex
+}
 
-	err := prepare_ui()
-	if err != nil {
-		return err
+var DefaultUiUpdater = &UIUpdater{}
+
+func NewUiUpdater(externalUI, externalUIURL, externalUIName string) *UIUpdater {
+	updater := &UIUpdater{}
+	// checkout externalUI exist
+	if externalUI != "" {
+		updater.autoDownloadUI = true
+		updater.externalUIPath = C.Path.Resolve(externalUI)
+	} else {
+		// default externalUI path
+		updater.externalUIPath = path.Join(C.Path.HomeDir(), "ui")
 	}
 
-	data, err := downloadForBytes(ExternalUIURL)
+	// checkout UIpath/name exist
+	if externalUIName != "" {
+		updater.autoDownloadUI = true
+		updater.externalUIPath = path.Join(updater.externalUIPath, externalUIName)
+	}
+
+	if externalUIURL != "" {
+		updater.externalUIURL = externalUIURL
+	}
+	return updater
+}
+
+func (u *UIUpdater) AutoDownloadUI() {
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
+	if u.autoDownloadUI {
+		dirEntries, _ := os.ReadDir(u.externalUIPath)
+		if len(dirEntries) > 0 {
+			log.Infoln("UI already exists, skip downloading")
+		} else {
+			log.Infoln("External UI downloading ...")
+			err := u.downloadUI()
+			if err != nil {
+				log.Errorln("Error downloading UI: %s", err)
+			}
+		}
+	}
+}
+
+func (u *UIUpdater) DownloadUI() error {
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
+	return u.downloadUI()
+}
+
+func (u *UIUpdater) downloadUI() error {
+	err := u.prepareUIPath()
+	if err != nil {
+		return fmt.Errorf("prepare UI path failed: %w", err)
+	}
+
+	data, err := downloadForBytes(u.externalUIURL)
 	if err != nil {
 		return fmt.Errorf("can't download  file: %w", err)
 	}
@@ -45,7 +87,7 @@ func UpdateUI() error {
 	}
 	defer os.Remove(saved)
 
-	err = cleanup(ExternalUIFolder)
+	err = cleanup(u.externalUIPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("cleanup exist file error: %w", err)
@@ -57,29 +99,20 @@ func UpdateUI() error {
 		return fmt.Errorf("can't extract zip file: %w", err)
 	}
 
-	err = os.Rename(unzipFolder, ExternalUIFolder)
+	err = os.Rename(unzipFolder, u.externalUIPath)
 	if err != nil {
-		return fmt.Errorf("can't rename folder: %w", err)
+		return fmt.Errorf("rename UI folder failed: %w", err)
 	}
 	return nil
 }
 
-func prepare_ui() error {
-	if ExternalUIPath == "" || ExternalUIURL == "" {
-		return ErrIncompleteConf
-	}
-
-	if ExternalUIName != "" {
-		ExternalUIFolder = filepath.Clean(path.Join(ExternalUIPath, ExternalUIName))
-		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
-			if err := os.MkdirAll(ExternalUIPath, os.ModePerm); err != nil {
-				return err
-			}
+func (u *UIUpdater) prepareUIPath() error {
+	if _, err := os.Stat(u.externalUIPath); os.IsNotExist(err) {
+		log.Infoln("dir %s does not exist, creating", u.externalUIPath)
+		if err := os.MkdirAll(u.externalUIPath, os.ModePerm); err != nil {
+			log.Warnln("create dir %s error: %s", u.externalUIPath, err)
 		}
-	} else {
-		ExternalUIFolder = ExternalUIPath
 	}
-
 	return nil
 }
 

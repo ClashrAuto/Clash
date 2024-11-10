@@ -1,4 +1,4 @@
-NAME=clash.auto
+NAME=mihomo
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
@@ -163,7 +163,3 @@ clean:
 CLANG ?= clang-14
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
-ebpf: export BPF_CLANG := $(CLANG)
-ebpf: export BPF_CFLAGS := $(CFLAGS)
-ebpf:
-	cd component/ebpf/ && go generate ./...

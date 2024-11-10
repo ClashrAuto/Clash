@@ -27,7 +27,6 @@ const (
 	Selector
 	Fallback
 	URLTest
-	URLDownload
 	LoadBalance
 
 	Shadowsocks
@@ -141,7 +140,6 @@ type ProxyAdapter interface {
 
 type Group interface {
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (mp map[string]uint16, err error)
-	URLDownload(timeout int, url string) (float64, error)
 	GetProxies(touch bool) []Proxy
 	Touch()
 }
@@ -149,7 +147,6 @@ type Group interface {
 type DelayHistory struct {
 	Time  time.Time `json:"time"`
 	Delay uint16    `json:"delay"`
-	Speed float64   `json:"speed"`
 }
 
 type ProxyState struct {
@@ -161,14 +158,10 @@ type DelayHistoryStoreType int
 
 type Proxy interface {
 	ProxyAdapter
+	Adapter() ProxyAdapter
 	AliveForTestUrl(url string) bool
 	DelayHistory() []DelayHistory
-	PutHistory(map[string][]DelayHistory)
-	ExtraDelayHistory() map[string][]DelayHistory
 	ExtraDelayHistories() map[string]ProxyState
-	LastDelay() uint16
-	LastSpeed() float64
-	URLDownload(timeout int, url string) (float64, error)
 	LastDelayForTestUrl(url string) uint16
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
 
@@ -220,6 +213,8 @@ func (at AdapterType) String() string {
 		return "WireGuard"
 	case Tuic:
 		return "Tuic"
+	case Ssh:
+		return "Ssh"
 
 	case Relay:
 		return "Relay"
@@ -229,12 +224,8 @@ func (at AdapterType) String() string {
 		return "Fallback"
 	case URLTest:
 		return "URLTest"
-	case URLDownload:
-		return "URLDownload"
 	case LoadBalance:
 		return "LoadBalance"
-	case Ssh:
-		return "Ssh"
 	default:
 		return "Unknown"
 	}
@@ -265,12 +256,16 @@ type UDPPacketInAddr interface {
 // PacketAdapter is a UDP Packet adapter for socks/redir/tun
 type PacketAdapter interface {
 	UDPPacket
+	// Metadata returns destination metadata
 	Metadata() *Metadata
+	// Key is a SNAT key
+	Key() string
 }
 
 type packetAdapter struct {
 	UDPPacket
 	metadata *Metadata
+	key      string
 }
 
 // Metadata returns destination metadata
@@ -278,10 +273,16 @@ func (s *packetAdapter) Metadata() *Metadata {
 	return s.metadata
 }
 
+// Key is a SNAT key
+func (s *packetAdapter) Key() string {
+	return s.key
+}
+
 func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
 	return &packetAdapter{
 		packet,
 		metadata,
+		packet.LocalAddr().String(),
 	}
 }
 
@@ -294,16 +295,22 @@ type WriteBackProxy interface {
 	UpdateWriteBack(wb WriteBack)
 }
 
+type PacketSender interface {
+	// Send will send PacketAdapter nonblocking
+	// the implement must call UDPPacket.Drop() inside Send
+	Send(PacketAdapter)
+	// Process is a blocking loop to send PacketAdapter to PacketConn and update the WriteBackProxy
+	Process(PacketConn, WriteBackProxy)
+	// ResolveUDP do a local resolve UDP dns blocking if metadata is not resolved
+	ResolveUDP(*Metadata) error
+	// Close stop the Process loop
+	Close()
+}
+
 type NatTable interface {
-	Set(key string, e PacketConn, w WriteBackProxy)
-
-	Get(key string) (PacketConn, WriteBackProxy)
-
-	GetOrCreateLock(key string) (*sync.Cond, bool)
+	GetOrCreate(key string, maker func() PacketSender) (PacketSender, bool)
 
 	Delete(key string)
-
-	DeleteLock(key string)
 
 	GetForLocalConn(lAddr, rAddr string) *net.UDPConn
 

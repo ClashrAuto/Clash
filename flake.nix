@@ -1,5 +1,5 @@
 {
-  description = "Another Clash Auto Kernel";
+  description = "Another Mihomo Kernel";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/master";
 
@@ -15,7 +15,7 @@
           };
         in
         rec {
-          packages.default = pkgs.clash-auto;
+          packages.default = pkgs.mihomo-meta;
         }
       ) //
     (
@@ -23,8 +23,8 @@
       {
         overlay = final: prev: {
 
-          clash-auto = final.buildGo119Module {
-            pname = "clash-auto";
+          mihomo-meta = final.buildGo119Module {
+            pname = "mihomo-meta";
             inherit version;
             src = ./.;
 
@@ -50,7 +50,7 @@
             doCheck = false;
 
             postInstall = ''
-              mv $out/bin/mihomo $out/bin/clash-auto
+              mv $out/bin/mihomo $out/bin/mihomo-meta
             '';
 
           };

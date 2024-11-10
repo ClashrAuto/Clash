@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
@@ -30,8 +29,8 @@ func proxyRouter() http.Handler {
 		r.Use(parseProxyName, findProxyByName)
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
-		r.Get("/speed", getProxySpeed)
 		r.Put("/", updateProxy)
+		r.Delete("/", unfixedProxy)
 	})
 	return r
 }
@@ -82,8 +81,8 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxy := r.Context().Value(CtxKeyProxy).(*adapter.Proxy)
-	selector, ok := proxy.ProxyAdapter.(outboundgroup.SelectAble)
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+	selector, ok := proxy.Adapter().(outboundgroup.SelectAble)
 	if !ok {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, newError("Must be a Selector"))
@@ -148,35 +147,14 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func getProxySpeed(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	url := query.Get("url")
-	// timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 16)
-	// fmt.Println(timeout)
-	// fmt.Println(err)
-	// if err != nil {
-	// 	render.Status(r, http.StatusBadRequest)
-	// 	render.JSON(w, r, ErrBadRequest)
-	// 	return
-	// }
-	timeout, _ := strconv.Atoi(query.Get("timeout"))
-
+func unfixedProxy(w http.ResponseWriter, r *http.Request) {
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
-
-	speed, err := proxy.URLDownload(timeout, url)
-	// if ctx.Err() != nil {
-	// 	render.Status(r, http.StatusGatewayTimeout)
-	// 	render.JSON(w, r, err)
-	// 	return
-	// }
-
-	if err != nil {
-		render.Status(r, http.StatusServiceUnavailable)
-		render.JSON(w, r, newError("An error occurred in the speed test"))
+	if selectAble, ok := proxy.Adapter().(outboundgroup.SelectAble); ok && proxy.Type() != C.Selector {
+		selectAble.ForceSet("")
+		cachefile.Cache().SetSelected(proxy.Name(), "")
+		render.NoContent(w, r)
 		return
 	}
-
-	render.JSON(w, r, render.M{
-		"speed": speed,
-	})
+	render.Status(r, http.StatusBadRequest)
+	render.JSON(w, r, ErrBadRequest)
 }

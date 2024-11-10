@@ -41,8 +41,8 @@ var (
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
 
-	baseURL       string = "https://github.com/ClashrAuto/clash/releases/download/Prerelease-Alpha/clash.auto"
-	versionURL    string = "https://github.com/ClashrAuto/clash/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
+	versionURL    string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -52,8 +52,8 @@ func init() {
 		amd64Compatible = "-compatible"
 	}
 	if !strings.HasPrefix(C.Version, "alpha") {
-		baseURL = "https://github.com/ClashrAuto/clash/releases/latest/download/clash.auto"
-		versionURL = "https://github.com/ClashrAuto/clash/releases/latest/download/version.txt"
+		baseURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo"
+		versionURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
 	}
 }
 
@@ -127,7 +127,7 @@ func UpdateCore(execPath string) (err error) {
 
 // prepare fills all necessary fields in Updater object.
 func prepare(exePath string) (err error) {
-	updateDir = filepath.Join(workDir, "clash.auto-update")
+	updateDir = filepath.Join(workDir, "meta-update")
 	currentExeName = exePath
 	_, pkgNameOnly := filepath.Split(packageURL)
 	if pkgNameOnly == "" {
@@ -136,14 +136,14 @@ func prepare(exePath string) (err error) {
 
 	packageName = filepath.Join(updateDir, pkgNameOnly)
 	//log.Infoln(packageName)
-	backupDir = filepath.Join(workDir, "clash.auto-backup")
+	backupDir = filepath.Join(workDir, "meta-backup")
 
 	if runtime.GOOS == "windows" {
-		updateExeName = "clash.auto" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
 	} else if runtime.GOOS == "android" && runtime.GOARCH == "arm64" {
-		updateExeName = "clash.auto-android-arm64-v8"
+		updateExeName = "mihomo-android-arm64-v8"
 	} else {
-		updateExeName = "clash.auto" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
 	}
 
 	log.Infoln("updateExeName: %s ", updateExeName)
@@ -230,14 +230,14 @@ func clean() {
 
 // MaxPackageFileSize is a maximum package file length in bytes. The largest
 // package whose size is limited by this constant currently has the size of
-// approximately 9 MiB.
+// approximately 32 MiB.
 const MaxPackageFileSize = 32 * 1024 * 1024
 
 // Download package file and save it to disk
 func downloadPackageFile() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, packageURL, http.MethodGet, nil, nil)
 	if err != nil {
 		return fmt.Errorf("http request failed: %w", err)
 	}
@@ -418,7 +418,7 @@ func copyFile(src, dst string) error {
 func getLatestVersion() (version string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, nil, nil)
 	if err != nil {
 		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}

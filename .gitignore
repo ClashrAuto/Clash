@@ -24,9 +24,5 @@ vendor
 # test suite
 test/config/cache*
 /output
-/.vscode
-
-full.yaml
-test.go
 .vscode/
 .fleet/

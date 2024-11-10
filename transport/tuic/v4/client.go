@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/puzpuzpuz/xsync/v3"
 	"net"
 	"runtime"
 	"sync"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/randv2"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 type ClientOption struct {

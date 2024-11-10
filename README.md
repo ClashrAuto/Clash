@@ -3,7 +3,7 @@
   <br>Meta Kernel<br>
 </h1>
 
-<h3 align="center">Another Clash Auto Kernel.</h3>
+<h3 align="center">Another Mihomo Kernel.</h3>
 
 <p align="center">
   <a href="https://goreportcard.com/report/github.com/MetaCubeX/mihomo">
@@ -87,7 +87,7 @@ API.
 
 ## Credits
 
-- [metacubex/mihomo](https://github.com/metacubex/mihomo)
+- [Dreamacro/clash](https://github.com/Dreamacro/clash)
 - [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
 - [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 - [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
