@@ -204,7 +204,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			if err != nil {
 				return nil, err
 			}
-
+			
 			return streamConn(c, streamOption{psk, option.Version, addr, obfsOption}), nil
 		})
 	}
