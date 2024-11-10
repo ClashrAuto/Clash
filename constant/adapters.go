@@ -147,6 +147,7 @@ type Group interface {
 type DelayHistory struct {
 	Time  time.Time `json:"time"`
 	Delay uint16    `json:"delay"`
+	Speed float64   `json:"speed"`
 }
 
 type ProxyState struct {
@@ -162,6 +163,9 @@ type Proxy interface {
 	AliveForTestUrl(url string) bool
 	DelayHistory() []DelayHistory
 	ExtraDelayHistories() map[string]ProxyState
+	LastDelay() uint16
+	LastSpeed() float64
+	URLDownload(timeout int, url string) (float64, error)
 	LastDelayForTestUrl(url string) uint16
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
 

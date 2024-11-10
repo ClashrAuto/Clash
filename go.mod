@@ -60,6 +60,8 @@ require (
 	lukechampine.com/blake3 v1.3.0
 )
 
+require github.com/VividCortex/ewma v1.2.0
+
 require (
 	github.com/RyuaNerin/go-krypto v1.2.4 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect

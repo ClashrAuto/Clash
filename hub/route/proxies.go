@@ -29,6 +29,7 @@ func proxyRouter() http.Handler {
 		r.Use(parseProxyName, findProxyByName)
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
+		r.Get("/speed", getProxySpeed)
 		r.Put("/", updateProxy)
 		r.Delete("/", unfixedProxy)
 	})
@@ -157,4 +158,37 @@ func unfixedProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	render.Status(r, http.StatusBadRequest)
 	render.JSON(w, r, ErrBadRequest)
+}
+
+func getProxySpeed(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	url := query.Get("url")
+	// timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 16)
+	// fmt.Println(timeout)
+	// fmt.Println(err)
+	// if err != nil {
+	// 	render.Status(r, http.StatusBadRequest)
+	// 	render.JSON(w, r, ErrBadRequest)
+	// 	return
+	// }
+	timeout, _ := strconv.Atoi(query.Get("timeout"))
+
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+
+	speed, err := proxy.URLDownload(timeout, url)
+	// if ctx.Err() != nil {
+	// 	render.Status(r, http.StatusGatewayTimeout)
+	// 	render.JSON(w, r, err)
+	// 	return
+	// }
+
+	if err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError("An error occurred in the speed test"))
+		return
+	}
+
+	render.JSON(w, r, render.M{
+		"speed": speed,
+	})
 }
